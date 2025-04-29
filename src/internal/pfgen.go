@@ -1,7 +1,5 @@
 package internal
 
-import "math"
-
 /*
 Implementation of the particle force generators.
 */
@@ -155,7 +153,7 @@ func (s *ParticleSpring) UpdateForce(particle *Particle, duration Real) {
 
 	// Calculate the magintude of the force using Hooke's law
 	magnitude := force.Magnitude()
-	magnitude = Real(math.Abs(float64(magnitude - s.RestLength)))
+	magnitude = Real(Abs(magnitude - s.RestLength))
 	magnitude *= s.SpringConstant
 
 	// Calculate the final force and apply it
@@ -169,12 +167,12 @@ func (s *ParticleSpring) UpdateForce(particle *Particle, duration Real) {
 // Generates a spring force between a particle and a fixed anchor point.
 // The force follows Hooke's law
 type ParticleAnchoredSpring struct {
-	Anchor         Vector // The fixed location that the spring is anchored to
-	SpringConstant Real   // Defines the stiffness
-	RestLength     Real   // Natural length of the spring when no force is applied
+	Anchor         *Vector // The fixed location that the spring is anchored to
+	SpringConstant Real    // Defines the stiffness
+	RestLength     Real    // Natural length of the spring when no force is applied
 }
 
-func NewParticleAnchoredSpring(anchor Vector, springConstant, restLength Real) *ParticleAnchoredSpring {
+func NewParticleAnchoredSpring(anchor *Vector, springConstant, restLength Real) *ParticleAnchoredSpring {
 	return &ParticleAnchoredSpring{
 		Anchor:         anchor,
 		SpringConstant: springConstant,
@@ -290,4 +288,54 @@ func (b *ParticleBuoyancy) UpdateForce(particle *Particle, duration Real) {
 	// Otherwise we are partially submerged
 	force.Y = b.LiquidDensity * b.Volume * (depth - b.MaxDepth - b.WaterHeight) / (2 * b.MaxDepth)
 	particle.AddForce(force)
+}
+
+// Generates a spring force that simulates a stiff spring where one end is attached to a fixed point
+// in space. It uses a mathematical appromiximation to avoid the numerical instability of real spring calculations.
+type ParticleFakeSpring struct {
+	Anchor         *Vector // Fixed location that the spring is attached to
+	SpringConstant Real    // Determines the stiffness of the spring
+	Damping        Real    // Controls the rate at which oscillations are reduced, higher values result in faster stabilization
+}
+
+func NewParticleFakeSpring(anchor *Vector, springConstant, damping Real) *ParticleFakeSpring {
+	return &ParticleFakeSpring{
+		Anchor:         anchor,
+		SpringConstant: springConstant,
+		Damping:        damping,
+	}
+}
+
+// Applies a fake spring force to simulate a stiff spring without numerical instability.
+func (s *ParticleFakeSpring) UpdateForce(particle *Particle, duration Real) {
+	// Check that we dont have infinite mass
+	if !particle.HasFiniteMass() {
+		return
+	}
+
+	// Calculate the relative position of the particle to the anchor
+	position := particle.GetPosition()
+	position.SubtractInPlace(s.Anchor)
+
+	// Calculate the constants and check they are in bounds
+	gamma := 0.5 * Sqrt(4*s.SpringConstant-s.Damping*s.Damping)
+	if gamma == 0.0 {
+		return
+	}
+
+	// Calculate intermediate values
+	c := position.Scale(s.Damping / (2.0 * gamma))
+	c.Add(particle.GetVelocity()).Scale((1.0 / gamma))
+
+	// Calculate the target position
+	target := position.Scale(Cos(gamma * duration))
+	target.Add(c.Scale(Sin(gamma * duration)))
+	target.ScaleInPlace(Exp(-0.5 * duration * s.Damping))
+
+	// Calculate the resulting acceleration and force
+	acceleration := target.Subtract(position).Scale(1.0 / (duration * duration)).
+		Subtract(particle.GetVelocity().Scale(duration))
+
+	// Apply the force (F = ma)
+	particle.AddForce(acceleration.Scale(particle.GetMass()))
 }
