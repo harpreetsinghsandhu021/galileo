@@ -15,8 +15,8 @@ type Vector struct {
 	// pad Real // Padding to ensure four word alignment
 }
 
-func NewVector3(x, y, z Real) Vector {
-	return Vector{
+func NewVector3(x, y, z Real) *Vector {
+	return &Vector{
 		X: x,
 		Y: y,
 		Z: z,
@@ -24,8 +24,8 @@ func NewVector3(x, y, z Real) Vector {
 }
 
 // Creates a new Vector with all components set to zero.
-func NewZeroVector() Vector {
-	return Vector{}
+func NewZeroVector() *Vector {
+	return &Vector{}
 }
 
 // Flips all componentts of the vector to their negative values.
@@ -78,8 +78,8 @@ func (v *Vector) NormalizeInPlace() {
 // Multiplies all the components of this vector by the given scalar and returns a new Vector.
 // This operation does not modify the original vector. Geomatrically, multiplication of a vector
 // by a scalar changes the length of the vector, but not the direction.
-func (v *Vector) Scale(scalar Real) Vector {
-	return Vector{
+func (v *Vector) Scale(scalar Real) *Vector {
+	return &Vector{
 		X: v.X * scalar,
 		Y: v.Y * scalar,
 		Z: v.Z * scalar,
@@ -96,7 +96,7 @@ func (v *Vector) ScaleInPlace(scalar Real) {
 
 // Returns a new vector that is the sum of this vector and the given vector.
 // Vector addition is performed component-wise and creates a new Vector instance.
-func (v *Vector) Add(other Vector) *Vector {
+func (v *Vector) Add(other *Vector) *Vector {
 	return &Vector{
 		X: v.X + other.X,
 		Y: v.Y + other.Y,
@@ -105,7 +105,7 @@ func (v *Vector) Add(other Vector) *Vector {
 }
 
 // Adds the components of the given vector to this vector, modifying the vector in-place.
-func (v *Vector) AddInPlace(other Vector) {
+func (v *Vector) AddInPlace(other *Vector) {
 	v.X += other.X
 	v.Y += other.Y
 	v.Z += other.Z
@@ -113,7 +113,7 @@ func (v *Vector) AddInPlace(other Vector) {
 
 // Returns a new vector that is the result of subtracting the given vector from this vector.
 // Vector subtraction is performed component-wise and creates a new Vector instance.
-func (v *Vector) Subtract(other Vector) *Vector {
+func (v *Vector) Subtract(other *Vector) *Vector {
 	return &Vector{
 		X: v.X - other.X,
 		Y: v.Y - other.Y,
@@ -122,7 +122,7 @@ func (v *Vector) Subtract(other Vector) *Vector {
 }
 
 // Subtracts the components of the given vector from this vector, modifying the vector in-place.
-func (v *Vector) SubtractInPlace(other Vector) {
+func (v *Vector) SubtractInPlace(other *Vector) {
 	v.X -= other.X
 	v.Y -= other.Y
 	v.Z -= other.Z
@@ -130,7 +130,7 @@ func (v *Vector) SubtractInPlace(other Vector) {
 
 // Adds another vector to this vector after scaling it by the given scale.
 // This operation performs the addition in-place, modifying the current vector.
-func (v *Vector) AddScaledVector(vector Vector, scale Real) {
+func (v *Vector) AddScaledVector(vector *Vector, scale Real) {
 	v.X += vector.X * scale
 	v.Y += vector.Y * scale
 	v.Z += vector.Z * scale

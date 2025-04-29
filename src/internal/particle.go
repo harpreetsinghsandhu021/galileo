@@ -7,13 +7,13 @@ package internal
 type Particle struct {
 	// Holds the linear position of the particle in world space.
 	// It represents the absolute location of the particle in the simulation.
-	Position Vector
+	Position *Vector
 	// Holds the linear velocity of the particle in world space.
 	// It represents the rate of change of position over time.
-	Velocity Vector
+	Velocity *Vector
 	// Holds the acceleration of the particle. This value is typically used to set acceleration
 	// due to gravity (its primary use), or any other constant acceleration.
-	Acceleration Vector
+	Acceleration *Vector
 	// Holds the amount of damping applied to linear motion. Damping is required to remove energy added
 	// through numerical instability in the integrator.
 	Damping Real
@@ -23,10 +23,10 @@ type Particle struct {
 	InverseMass Real
 	// Holds the accumulated force to applied at the next simulation iteration/ This value is zeroed at each integration
 	// step.
-	ForceAccum Vector
+	ForceAccum *Vector
 }
 
-func NewParticle(initialPosition Vector) *Particle {
+func NewParticle(initialPosition *Vector) *Particle {
 	return &Particle{
 		Position:     initialPosition,
 		Velocity:     NewZeroVector(),
@@ -34,7 +34,7 @@ func NewParticle(initialPosition Vector) *Particle {
 	}
 }
 
-func NewParticleWithProperties(position, velocity, acceleration Vector) *Particle {
+func NewParticleWithProperties(position, velocity, acceleration *Vector) *Particle {
 	return &Particle{
 		Position:     position,
 		Velocity:     velocity,
@@ -114,7 +114,7 @@ func (p *Particle) ClearAccumulator() {
 }
 
 // Adds a force to the accumulator.
-func (p *Particle) AddForce(force Vector) {
+func (p *Particle) AddForce(force *Vector) {
 	p.ForceAccum.AddInPlace(force)
 }
 
@@ -126,7 +126,7 @@ func (p *Particle) GetDamping() Real {
 	return p.Damping
 }
 
-func (p *Particle) SetPosition(position Vector) {
+func (p *Particle) SetPosition(position *Vector) {
 	p.Position = position
 }
 
@@ -136,15 +136,15 @@ func (p *Particle) SetPositionComponents(x, y, z Real) {
 	p.Position.Z = z
 }
 
-func (p *Particle) GetPosition() Vector {
+func (p *Particle) GetPosition() *Vector {
 	return p.Position
 }
 
-func (p *Particle) SetVelocity(velocity Vector) {
+func (p *Particle) SetVelocity(velocity *Vector) {
 	p.Velocity = velocity
 }
 
-func (p *Particle) GetVelocity() Vector {
+func (p *Particle) GetVelocity() *Vector {
 	return p.Velocity
 }
 
@@ -154,11 +154,11 @@ func (p *Particle) SetVelocityComponents(x, y, z Real) {
 	p.Velocity.Y = z
 }
 
-func (p *Particle) SetAcceleration(acceleration Vector) {
+func (p *Particle) SetAcceleration(acceleration *Vector) {
 	p.Acceleration = acceleration
 }
 
-func (p *Particle) GetAcceleration() Vector {
+func (p *Particle) GetAcceleration() *Vector {
 	return p.Acceleration
 }
 
