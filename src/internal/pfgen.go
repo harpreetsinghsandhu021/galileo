@@ -234,3 +234,60 @@ func (b *ParticleBungee) UpdateForce(particle *Particle, duration Real) {
 	force.Scale(-magnitude)
 	particle.AddForce(force)
 }
+
+// BUOYANCY FORCE GENERATOR
+
+// Generates a buoyancy force for a plane of liquid parallel to XZ plane.
+// The force is calculated based on the submersion depth of the particle in the liquid.
+type ParticleBuoyancy struct {
+	MaxDepth      Real // Max submersion depth of the object before it generates its maximum buoyancy force.
+	Volume        Real // Represents the volum of the object
+	WaterHeight   Real // Height of the water plane above y = 0, The plane will be parallel to the XZ plane.
+	LiquidDensity Real // Represents the density of the liquid, Pure water has a density of 1000 kg per cubic meter.
+}
+
+func NewParticleBuoyancy(maxDepth, volume, waterHeight Real, liquidDensity ...Real) *ParticleBuoyancy {
+	density := Real(1000.0)
+	if len(liquidDensity) > 0 {
+		density = liquidDensity[0]
+	}
+
+	return &ParticleBuoyancy{
+		MaxDepth:      maxDepth,
+		Volume:        volume,
+		WaterHeight:   waterHeight,
+		LiquidDensity: density,
+	}
+}
+
+// Applies the buoyancy force to the given particle.
+// The force calculation depends on the submersion depth:
+// 1. Above water (depth >= waterHeight + maxDepth): No force
+// 2. Fully submerged (depth <= waterHeight - maxDepth): F = pV
+// 3. Partially submerged: F = pV * (d - maxDepth - waterHeight)/(2 * maxDepth), where:
+// - p is liquid density
+// - V is volume
+// - d is current depth
+func (b *ParticleBuoyancy) UpdateForce(particle *Particle, duration Real) {
+	// Calculate the submersion depth
+	depth := particle.GetPosition().Y
+
+	// Check if we're out of the water
+	if depth >= b.WaterHeight+b.MaxDepth {
+		return
+	}
+
+	// Initialize force vector (only Y component will be non-zero), assuming buoyancy is acting in the up direction
+	force := NewVector3(0, 0, 0)
+
+	// Check if we're at maximum depth
+	if depth <= b.WaterHeight-b.MaxDepth {
+		force.Y = b.LiquidDensity * b.Volume
+		particle.AddForce(force)
+		return
+	}
+
+	// Otherwise we are partially submerged
+	force.Y = b.LiquidDensity * b.Volume * (depth - b.MaxDepth - b.WaterHeight) / (2 * b.MaxDepth)
+	particle.AddForce(force)
+}
