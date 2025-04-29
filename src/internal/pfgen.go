@@ -1,5 +1,7 @@
 package internal
 
+import "math"
+
 /*
 Implementation of the particle force generators.
 */
@@ -121,4 +123,114 @@ func (d *ParticleDrag) UpdateForce(particle *Particle, duration Real) {
 	velocity.Normalize()
 	velocity.Scale(-dragCoeff)
 	particle.AddForce(velocity)
+}
+
+// SPRING FORCE GENERATOR
+
+// Generates a spring force between two particles.
+// The force follows Hooke's law: F = -k(|d| - r)(d/|d|), where:
+// - k is the spring constant
+// - d is the vector between the particles
+// - |d| is the current length of the spring
+// - r is the rest length
+type ParticleSpring struct {
+	Other          *Particle
+	SpringConstant Real
+	RestLength     Real
+}
+
+func NewParticleSpring(other *Particle, springConstant, restLength Real) *ParticleSpring {
+	return &ParticleSpring{
+		Other:          other,
+		SpringConstant: springConstant,
+		RestLength:     restLength,
+	}
+}
+
+// Applies the spring force to the given particle
+func (s *ParticleSpring) UpdateForce(particle *Particle, duration Real) {
+	// Calculate the vector of the spring by getting the vector from other to particle (p - o)
+	force := particle.GetPosition()
+	force.SubtractInPlace(s.Other.GetPosition())
+
+	// Calculate the magintude of the force using Hooke's law
+	magnitude := force.Magnitude()
+	magnitude = Real(math.Abs(float64(magnitude - s.RestLength)))
+	magnitude *= s.SpringConstant
+
+	// Calculate the final force and apply it
+	force.NormalizeInPlace()
+	force.ScaleInPlace(-magnitude)
+	particle.AddForce(force)
+}
+
+// ANCHORED SPRING FORCE GENERATOR
+
+// Generates a spring force between a particle and a fixed anchor point.
+// The force follows Hooke's law
+type ParticleAnchoredSpring struct {
+	Anchor         Vector // The fixed location that the spring is anchored to
+	SpringConstant Real   // Defines the stiffness
+	RestLength     Real   // Natural length of the spring when no force is applied
+}
+
+func NewParticleAnchoredSpring(anchor Vector, springConstant, restLength Real) *ParticleAnchoredSpring {
+	return &ParticleAnchoredSpring{
+		Anchor:         anchor,
+		SpringConstant: springConstant,
+		RestLength:     restLength,
+	}
+}
+
+func (s *ParticleAnchoredSpring) UpdateForce(particle *Particle, duration Real) {
+	// Calculate the vector of the spring
+	force := particle.GetPosition()
+	force.SubtractInPlace(s.Anchor)
+
+	// Calculate the magnitude of the force
+	magnitude := force.Magnitude()
+	magnitude = (s.RestLength - magnitude) * s.SpringConstant
+
+	// Calculate final force and apply it
+	force.NormalizeInPlace()
+	force.ScaleInPlace(-magnitude)
+	particle.AddForce(force)
+}
+
+// BUNGEE SPRING FORCE GENERATOR
+
+// Generates a spring force only when extended
+type ParticleBungee struct {
+	Other          *Particle
+	SpringConstant Real
+	RestLength     Real
+}
+
+func NewParticleBungee(other *Particle, springConstant, restLength Real) *ParticleBungee {
+	return &ParticleBungee{
+		Other:          other,
+		SpringConstant: springConstant,
+		RestLength:     restLength,
+	}
+}
+
+// Applies the spring force to the given particle.
+func (b *ParticleBungee) UpdateForce(particle *Particle, duration Real) {
+	// Calculate the vector of the spring
+	force := particle.GetPosition()
+	force.SubtractInPlace(b.Other.GetPosition())
+
+	// Check if bungee is compressed
+	magnitude := force.Magnitude()
+	if magnitude <= b.RestLength {
+		return
+	}
+
+	// Calculate the magnitude of the force
+	magnitude = b.SpringConstant * (b.RestLength - magnitude)
+
+	// Calculate the final force and apply it
+	force.NormalizeInPlace()
+	force.Scale(-magnitude)
+	particle.AddForce(force)
 }
