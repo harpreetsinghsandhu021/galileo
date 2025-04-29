@@ -34,8 +34,8 @@ type FireWorkRule struct {
 	MaxAge internal.Real
 
 	// Defines the velocity bounds for the firework
-	MinVelocity internal.Vector
-	MaxVelocity internal.Vector
+	MinVelocity *internal.Vector
+	MaxVelocity *internal.Vector
 
 	// Controls how much the firework slows down over time
 	Damping internal.Real
@@ -44,7 +44,7 @@ type FireWorkRule struct {
 	Payloads []*Payload
 }
 
-func NewFirework(position internal.Vector, fireworkType int) *Firework {
+func NewFirework(position *internal.Vector, fireworkType int) *Firework {
 	return &Firework{
 		Particle: internal.NewParticle(position),
 		Type:     uint(fireworkType),
@@ -63,7 +63,7 @@ func NewFireworkRule(fireworkType int,
 	minAge,
 	maxAge internal.Real,
 	minVelocity,
-	maxVelocity internal.Vector,
+	maxVelocity *internal.Vector,
 	damping internal.Real,
 	payloads []*Payload) *FireWorkRule {
 	return &FireWorkRule{
@@ -142,7 +142,7 @@ func (f *Firework) Update(duration internal.Real) bool {
 // If parent is provided, the new firework inherits some properties from it.
 func (r *FireWorkRule) Create(parent *Firework) *Firework {
 	// Create firework with initial position
-	var position internal.Vector
+	var position *internal.Vector
 	if parent != nil {
 		// Inherit parent's position
 		position = parent.GetPosition()
@@ -177,8 +177,8 @@ func (r *FireWorkRule) Create(parent *Firework) *Firework {
 }
 
 // Generates a random vector within the given bounds
-func randomVector(min, max internal.Vector) internal.Vector {
-	return internal.Vector{
+func randomVector(min, max *internal.Vector) *internal.Vector {
+	return &internal.Vector{
 		X: min.X + internal.Real(rand.Float64())*(max.X-min.Y),
 		Y: min.Y + internal.Real(rand.Float64())*(max.Y-min.Y),
 		Z: min.Z + internal.Real(rand.Float64())*(max.Z-min.Z),
