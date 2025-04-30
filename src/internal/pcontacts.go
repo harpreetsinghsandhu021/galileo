@@ -44,7 +44,8 @@ func (c *ParticleContact) calculateSeperatingVelocity() Real {
 	return relativeVelocity.ScalarProduct(c.ContactNormal)
 }
 
-// Handles the velocity changes during collision using the impulse-momentum equation from classical mechancis:
+// Handles the velocity changes during collision using the impulse-momentum equation, with additional handling for acceleration
+// based velocity buildup from classical mechancis:
 // Formula: v_new = v_old + (J * n) / m, where:
 // - v_new: new velocity after collision
 // - v_old: original velocity before collision
@@ -68,6 +69,25 @@ func (c *ParticleContact) resolveVelocity(duration Real) {
 	// restitution = 1.0 means perfect bounce
 	// restitution = 0.0 means complete energy loss
 	newSepVelocity := -seperatingVelocity * c.Restitution
+
+	// Check velocity buildup due to acceleration only
+	accCausedVelocity := c.Particles[0].GetAcceleration()
+	if c.Particles[1] != nil {
+		accCausedVelocity.SubtractInPlace(c.Particles[1].GetAcceleration())
+	}
+
+	accCausedSepVelocity := accCausedVelocity.ScalarProduct(c.ContactNormal)
+
+	// If we've got a closing velocity due to acceleration buildup, remove it from the new separating velocity
+	if accCausedSepVelocity < 0 {
+		newSepVelocity += c.Restitution * accCausedSepVelocity
+
+		// Ensyre we have'nt removed more than was there to remove.
+		if newSepVelocity < 0 {
+			newSepVelocity = 0
+		}
+	}
+
 	deltaVelocity := newSepVelocity - seperatingVelocity
 
 	// Calculate inverse mass sum to distribute impulse properly.
@@ -155,4 +175,53 @@ func (c *ParticleContact) resolveInterpenetration(duration Real) {
 		c.Particles[0].SetPosition(p1newPos)
 	}
 
+}
+
+// Handles resolution of multiple particle contacts.
+// A single resolver instance can be shared for the entire simulation.
+type ParticleContactResolver struct {
+	iterations     uint // Maximum number of iterations allowed for contact resolution
+	iterationsUsed uint // Performance tracking value - records actual iterations used
+}
+
+func NewParticleContactResolver(iterations uint) *ParticleContactResolver {
+	return &ParticleContactResolver{
+		iterations: iterations,
+	}
+}
+
+// Updates the maximum number of iterations that can be used
+func (r *ParticleContactResolver) SetIterations(iterations uint) {
+	r.iterations = iterations
+}
+
+// Resolves a set of particle contacts for both penetration and velocity.
+// It processes contacts in order of severity (largest closing velocity first) to ensure the most
+// significant collisions are handles within the iteration limit.
+func (r *ParticleContactResolver) ResolveContacts(contacts []*ParticleContact, duration Real) {
+	r.iterationsUsed = 0
+
+	for r.iterationsUsed < r.iterations {
+		// Find the contact with the largest closing velocity
+		max := MaxReal
+		maxIndex := len(contacts)
+
+		// Iterate through contacts to find the most severe collision
+		for i := 0; i < len(contacts); i++ {
+			sepVel := contacts[i].calculateSeperatingVelocity()
+			if sepVel < max && (sepVel < 0 || contacts[i].Penetration > 0) {
+				max = sepVel
+				maxIndex = i
+			}
+		}
+
+		// Break if no contacts need resolving
+		if maxIndex == len(contacts) {
+			break
+		}
+
+		// Resolve the most severe contact
+		contacts[maxIndex].Resolve(duration)
+		r.iterationsUsed++
+	}
 }
