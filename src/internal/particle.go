@@ -47,6 +47,10 @@ func (p *Particle) SetInverseMass(inverseMass Real) {
 	p.InverseMass = inverseMass
 }
 
+func (p *Particle) GetInverseMass() Real {
+	return p.InverseMass
+}
+
 // Sets the mass of the particle (must be > 0).
 func (p *Particle) SetMass(mass Real) {
 	if mass <= 0 {
