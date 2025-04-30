@@ -49,18 +49,18 @@ func (v *Vector) SquareMagnitude() Real {
 
 // Returns a new normalized vector (a unit vector in the same direction) as this vector.
 // A normalized vector has a magnitude of 1.0. If the vector has zero magnitude, it returns a zero vector
-func (v *Vector) Normalize() Vector {
+func (v *Vector) Normalize() *Vector {
 	mag := v.Magnitude()
 
 	if mag > 0 {
-		return Vector{
+		return &Vector{
 			X: v.X / mag,
 			Y: v.Y / mag,
 			Z: v.Z / mag,
 		}
 	}
 
-	return *v
+	return v
 }
 
 // Modifies this vector to have a magnitide of 1.0.
@@ -161,7 +161,7 @@ func (v *Vector) ComponentProductInPlace(other Vector) {
 // - It can be used to find the angle b/w vectors.
 // - It helps determine if vectors are perpendicular (dot product = 0)
 // - It projects one vector into another
-func (v *Vector) ScalarProduct(other Vector) Real {
+func (v *Vector) ScalarProduct(other *Vector) Real {
 	return v.X*other.X + v.Y*other.Y + v.Z*other.Z
 }
 
@@ -176,7 +176,7 @@ func (v *Vector) ScalarProduct(other Vector) Real {
 // - The resulting vector is perpendiculat to both input vectors.
 // - Its magnitude is the area of the parallelogram formed by the vectors.
 // - The direction follows the right-hand rule
-func (v *Vector) VectorProduct(other Vector) *Vector {
+func (v *Vector) VectorProduct(other *Vector) *Vector {
 	return &Vector{
 		X: v.Y*other.Z - v.Z*other.Y,
 		Y: v.Z*other.X - v.X*other.Z,
@@ -195,6 +195,6 @@ func (v *Vector) VectorProductInPlace(other Vector) {
 }
 
 // An alias for VectorProduct that provides a shorter name for this commonly used operation.
-func (v *Vector) Cross(other Vector) *Vector {
+func (v *Vector) Cross(other *Vector) *Vector {
 	return v.VectorProduct(other)
 }
