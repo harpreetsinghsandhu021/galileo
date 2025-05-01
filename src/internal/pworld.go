@@ -45,8 +45,16 @@ func (w *ParticleWorld) GetParticles() []*Particle {
 	return w.Particles
 }
 
+func (w *ParticleWorld) SetParticle(particle *Particle) {
+	w.Particles = append(w.Particles, particle)
+}
+
 func (w *ParticleWorld) GetContactGenerators() []ParticleContactGenerator {
 	return w.contactGenerators
+}
+
+func (w *ParticleWorld) SetContactGenerator(gen ParticleContactGenerator) {
+	w.contactGenerators = append(w.contactGenerators, gen)
 }
 
 func (w *ParticleWorld) GetForceRegistry() *ParticleForceRegistry {
@@ -85,7 +93,7 @@ func (w *ParticleWorld) integrate(duration Real) {
 
 // Processes all the physics calculations for the particle world.
 // This is the main entry point for physics simulation each frame.
-func (w *ParticleWorld) runPhysics(duration Real) {
+func (w *ParticleWorld) RunPhysics(duration Real) {
 	// First apply the force generators
 	w.registry.UpdateForces(duration)
 	// Then integrate the objects
@@ -99,4 +107,44 @@ func (w *ParticleWorld) runPhysics(duration Real) {
 		}
 		w.resolver.ResolveContacts(w.contacts[:usedContacts], duration)
 	}
+}
+
+// Generates contacts b/w particles and the ground plane. It implements the ParticleContactGenerator interface to
+// integrate with the physics engine's contact resolution system.
+type GroundContacts struct {
+	ParticleContactGenerator
+	particles []*Particle // refs to particles that need ground collision checking
+}
+
+func (g *GroundContacts) Init(particles []*Particle) {
+	g.particles = particles
+}
+
+// Implements ParticleContactGenerator interface.
+// It generates contacts for any particles that have penetrated the ground plane (y < 0).
+// Parameters:
+//   - contact: Pointer to first available contact in contact array.
+//   - limit:   Max number of contacts that can be generated.
+func (g *GroundContacts) AddContact(contact *ParticleContact, limit uint) uint {
+	count := uint(0)
+
+	for _, p := range g.particles {
+		y := p.GetPosition().Y
+		if y < 0.0 {
+			if count >= limit {
+				return count
+			}
+
+			contact.ContactNormal = UP
+			contact.Particles[0] = p
+			contact.Particles[1] = nil
+			contact.Penetration = -y
+			contact.Restitution = 0.2
+
+			count++
+		}
+
+	}
+
+	return count
 }
