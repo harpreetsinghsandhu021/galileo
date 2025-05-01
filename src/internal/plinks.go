@@ -144,3 +144,45 @@ func (r *ParticleRod) AddContact(contact *ParticleContact, limit uint) uint {
 
 	return 1
 }
+
+// The base class for constraints b/w a particle and a fixed anchor point
+type ParticleConstraint struct {
+	Particle *Particle // Particle connected to the anchor
+	Anchor   *Vector   // The anchor point where the constraint is attached
+}
+
+func (constraint *ParticleConstraint) CurrentLength() float32 {
+	relativePos := constraint.Particle.GetPosition().Subtract(constraint.Anchor)
+	return float32(relativePos.Magnitude())
+}
+
+// Represents a cable constraint b/w a particle and a fixed anchor point.
+type ParticleCableConstraint struct {
+	ParticleConstraint
+	MaxLength   float32
+	Restitution float32
+}
+
+// Generates a contact if the cable constraint is overextended
+func (cable *ParticleCableConstraint) AddContact(contact *ParticleContact, limit uint) uint {
+	length := cable.CurrentLength()
+
+	// Check if we're over-extended
+	if length < cable.MaxLength {
+		return 0
+	}
+
+	// Otherwise return the contact
+	contact.Particles[0] = cable.Particle
+	contact.Particles[1] = nil // No second particle for constraints
+
+	// Calculate the normal
+	normal := cable.Anchor.Subtract(cable.Particle.GetPosition())
+	normal.Normalize()
+	contact.ContactNormal = normal
+
+	contact.Penetration = Real(length - cable.MaxLength)
+	contact.Restitution = Real(cable.Restitution)
+
+	return 1
+}

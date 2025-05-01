@@ -3,6 +3,7 @@ package internal
 import "math"
 
 var GRAVITY = NewVector3(0, -9.81, 0)
+var UP = NewVector3(0, 1, 0)
 
 // Represents a 3D vector with x, y, z components.
 // It can be used for representing positions, directions, velocities, and other
