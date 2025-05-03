@@ -199,3 +199,397 @@ func (v *Vector) VectorProductInPlace(other Vector) {
 func (v *Vector) Cross(other *Vector) *Vector {
 	return v.VectorProduct(other)
 }
+
+// Holds a 3*3 row major matrix representing a transformation in 3D space that does not include
+// a translational component. This matrix is not padded to produce an aligned structure.
+type Matrix3 struct {
+	Data [9]float32
+}
+
+// Transforms the given vector by this matrix. The transformation applies the matrix to the vector using
+// standard matrix-vector multiplication rules, where each component of the resulting vector is the dot
+// product of a row of the matrix with the inpyut vector.
+func (m *Matrix3) MultiplyVector(vector *Vector) *Vector {
+	return NewVector3(
+		vector.X*Real(m.Data[0])+vector.Y*Real(m.Data[1])+vector.Z*Real(m.Data[2]),
+		vector.X*Real(m.Data[3])+vector.Y*Real(m.Data[4])+vector.Z*Real(m.Data[5]),
+		vector.X*Real(m.Data[6])+vector.Y*Real(m.Data[7])+vector.Z*Real(m.Data[8]),
+	)
+}
+
+// Transforms the given vector by this matrix. This method is a convenience wrapper around MultiplyVector
+// and provides a more descriptive name for the operation being performed.
+func (m *Matrix3) Transform(vector *Vector) *Vector {
+	return m.MultiplyVector(vector)
+}
+
+// Returns a new matrix that is the result of multiplying this matrix by another matrix. Matrix multiplication is
+// performed using the standard mathematical definition: For each element (i, j) in the result matrix, we compute
+// the dot product of the i-th row of this matrix with the j-th column of the other matrix.
+func (m *Matrix3) Multiply(other *Matrix3) *Matrix3 {
+	return &Matrix3{
+		Data: [9]float32{
+			m.Data[0]*other.Data[0] + m.Data[1]*other.Data[3] + m.Data[2]*other.Data[6],
+			m.Data[0]*other.Data[1] + m.Data[1]*other.Data[4] + m.Data[2]*other.Data[7],
+			m.Data[0]*other.Data[2] + m.Data[1]*other.Data[5] + m.Data[2]*other.Data[8],
+
+			m.Data[3]*other.Data[0] + m.Data[4]*other.Data[3] + m.Data[5]*other.Data[6],
+			m.Data[3]*other.Data[1] + m.Data[4]*other.Data[4] + m.Data[5]*other.Data[7],
+			m.Data[3]*other.Data[2] + m.Data[4]*other.Data[5] + m.Data[5]*other.Data[8],
+
+			m.Data[6]*other.Data[0] + m.Data[7]*other.Data[3] + m.Data[8]*other.Data[6],
+			m.Data[6]*other.Data[1] + m.Data[7]*other.Data[4] + m.Data[8]*other.Data[7],
+			m.Data[6]*other.Data[2] + m.Data[7]*other.Data[5] + m.Data[8]*other.Data[8],
+		},
+	}
+}
+
+// Multiplies this matrix by another matrix and stores the result in this matrix.
+func (m *Matrix3) MultiplyInPlace(other *Matrix3) {
+	var t1, t2, t3 float32
+
+	t1 = m.Data[0]*other.Data[0] + m.Data[1]*other.Data[3] + m.Data[2]*other.Data[6]
+	t2 = m.Data[0]*other.Data[1] + m.Data[1]*other.Data[4] + m.Data[2]*other.Data[7]
+	t3 = m.Data[0]*other.Data[2] + m.Data[1]*other.Data[5] + m.Data[2]*other.Data[8]
+
+	m.Data[0] = t1
+	m.Data[1] = t2
+	m.Data[2] = t3
+
+	t1 = m.Data[3]*other.Data[0] + m.Data[4]*other.Data[3] + m.Data[5]*other.Data[6]
+	t2 = m.Data[3]*other.Data[1] + m.Data[4]*other.Data[4] + m.Data[5]*other.Data[7]
+	t3 = m.Data[3]*other.Data[2] + m.Data[4]*other.Data[5] + m.Data[5]*other.Data[8]
+
+	m.Data[3] = t1
+	m.Data[4] = t2
+	m.Data[5] = t3
+
+	t1 = m.Data[6]*other.Data[0] + m.Data[7]*other.Data[3] + m.Data[8]*other.Data[6]
+	t2 = m.Data[6]*other.Data[1] + m.Data[7]*other.Data[4] + m.Data[8]*other.Data[7]
+	t3 = m.Data[6]*other.Data[2] + m.Data[7]*other.Data[5] + m.Data[8]*other.Data[8]
+
+	m.Data[6] = t1
+	m.Data[7] = t2
+	m.Data[8] = t3
+}
+
+// Sets this matrix to be the inverse of the given matrix. The inverse of a matrix M is another M' such that M * M' = I,
+// where I is the identity matrix. The inverse is calculated using the classical adjoint formula:
+// M' = adj(M) / det(M) where adj(M) is the adjoint matrix and det(M) is the determinant.
+// For a 3*3 matrix, the calculation involves computing factors and the determinant. Several temporary variables
+// are used to avoid redundant calculations and improve performance. If the determinant is zero, the matrix is singular (non-invertible),
+// and this method will return without changing the matrix.
+func (mat *Matrix3) SetInverse(m *Matrix3) {
+	// Calculate intermediate terms used multiple times in the calculation
+	t1 := m.Data[0] * m.Data[4]
+	t2 := m.Data[0] * m.Data[5]
+	t3 := m.Data[1] * m.Data[3]
+	t4 := m.Data[2] * m.Data[3]
+	t5 := m.Data[1] * m.Data[6]
+	t6 := m.Data[2] * m.Data[6]
+
+	// Calculate the determinant
+	det := (t1*m.Data[8] - t2*m.Data[7] - t3*m.Data[8] + t4*m.Data[7] + t5*m.Data[5] - t6*m.Data[4])
+
+	// Make sure the determinant is non-zero (matrix is invertible)
+	if det == 0.0 {
+		return
+	}
+
+	// Calculate the inverse determinant once to avoid division in each element
+	invd := 1.0 / det
+
+	// Calculate each element of the inverse matrix using cofactors, transposing as we go
+	mat.Data[0] = (m.Data[4]*m.Data[8] - m.Data[5]*m.Data[7]) * invd
+	mat.Data[1] = -(m.Data[1]*m.Data[8] - m.Data[2]*m.Data[7]) * invd
+	mat.Data[2] = (m.Data[1]*m.Data[5] - m.Data[2]*m.Data[4]) * invd
+
+	mat.Data[3] = -(m.Data[3]*m.Data[8] - m.Data[5]*m.Data[6]) * invd
+	mat.Data[4] = (m.Data[0]*m.Data[8] - t6) * invd
+	mat.Data[5] = -(t2 - t4) * invd
+
+	mat.Data[6] = -(m.Data[3]*m.Data[7] - m.Data[4]*m.Data[6]) * invd
+	mat.Data[7] = (m.Data[0]*m.Data[7] - t5) * invd
+	mat.Data[8] = (t1 - t3) * invd
+}
+
+// Returns a new matrix containing the inverse of this matrix.
+func (mat *Matrix3) Inverse() *Matrix3 {
+	var result *Matrix3
+	result.SetInverse(mat)
+
+	return result
+}
+
+// Sets this matrix to be the transpose of the given matrix.
+// The transpose of a matrix is obtained by flipping the matrix over its main diagonal, switching the row and column
+// indices of each element. For a 3*3 matrix, the element at position (i,j) in the original matrix becomes the element
+// at position (j,i) in the transpose.
+func (mat *Matrix3) SetTranspose(m *Matrix3) {
+	mat.Data[0] = m.Data[0]
+	mat.Data[1] = m.Data[3]
+	mat.Data[2] = m.Data[6]
+	mat.Data[3] = m.Data[1]
+	mat.Data[4] = m.Data[4]
+	mat.Data[5] = m.Data[7]
+	mat.Data[6] = m.Data[2]
+	mat.Data[7] = m.Data[5]
+	mat.Data[8] = m.Data[8]
+}
+
+func (mat *Matrix3) Transpose() *Matrix3 {
+	var result *Matrix3
+	result.SetTranspose(mat)
+	return result
+}
+
+// Sets this matrix to be the rotation matrix corresponding to the given quaternion. A Quaternion represents a rotation in 3D space.
+// Converting a quaternion to a rotation matrix allows that rotation allows that rotation to be applied to vectors using matrix multiplication.
+// This is often more efficient than using quarternions directly for repeated transformations of multiple points.
+//
+// The conversion uses the following formula for a unit quaternion q = [r, i, j ,k]:
+//
+// [ 1-2(j² + k²) 2(ij + kr)   2(ik - jr)   ]
+// [ 2(ij - kr)   1-2(i² + k²) 2(jk + ir)   ]
+// [ 2(ik + jr)   2(jk - ir)   1-2(i² + j²) ]
+//
+// This formula assumes the quaternion is normalized (has unit length). If working with non-normalized quaternions, you should normalize them
+// before calling this method for correct results.
+//
+// The resulting matrix can be used to transform vectors by multiplying them by this matrix. The transformation will rotate the vectors according
+// to the rotation represented by the quaternion.
+func (mat *Matrix3) SetOrientation(q *Quaternion) {
+	// First row
+	mat.Data[0] = 1 - 2*(q.J*q.J+q.K*q.K)
+	mat.Data[1] = 2 * (q.I*q.J + q.K*q.R)
+	mat.Data[2] = 2 * (q.I*q.K - q.J*q.R)
+
+	mat.Data[3] = 2 * (q.I*q.J - q.K*q.R)
+	mat.Data[4] = 1 - 2*(q.I*q.I+q.K*q.K)
+	mat.Data[5] = 2 * (q.J*q.K + q.I*q.R)
+
+	mat.Data[6] = 2 * (q.I*q.K + q.J*q.R)
+	mat.Data[7] = 2 * (q.J*q.K - q.I*q.R)
+	mat.Data[8] = 1 - 2*(q.I*q.I+q.J*q.J)
+}
+
+// Holds a transform matrix, consisting of a rotation matrix and a position. The matrix has 12
+// elements, and it is assumed that the remaining four are (0,0,0,1) producing a homogeneous matrix.
+type Matrix4 struct {
+	Data [12]float32
+}
+
+// Transforms the given vector by this matrix. The transformation applies the matrix to the vector
+// using homogeneous coordinates, which allows the matrix to represent translations in addition to linear
+// transformations. This essentially a 4*4 matrix multiplication where the input vector is treated as a 4D vector
+// with w=1( a point in 3D space), and the result is projected back to 3D. The matrix is assumed to be in row-major
+// order with the last row being [0,0,0,1], which is not explicitly stored. This method can be useed to apply any
+// affine transformation (rotation, scaling, translation, shearing, etc.) to a 3D point.
+func (m *Matrix4) MultiplyVector(vector *Vector) *Vector {
+	return NewVector3(
+		vector.X*Real(m.Data[0])+vector.Y*Real(m.Data[1])+vector.Z*Real(m.Data[2])+Real(m.Data[3]),
+		vector.X*Real(m.Data[4])+vector.Y*Real(m.Data[5])+vector.Z*Real(m.Data[6])+Real(m.Data[7]),
+		vector.X*Real(m.Data[8])+vector.Y*Real(m.Data[9])+vector.Z*Real(m.Data[10])+Real(m.Data[11]),
+	)
+}
+
+// This method is a convenience wrapper around MultiplyVector and provides
+// a more descriptive name for the operation being performed.
+func (m *Matrix4) Transform(vector *Vector) *Vector {
+	return m.MultiplyVector(vector)
+}
+
+// Returns a new matrix that is the result of multiplying this matrix with another matrix.
+// This method performs matrix multiplication for 4*4 transformation matrices, where the matrices
+// are stored in a compact 12-element array (omitting the last row is assumed to be [0,0,0,1]).
+// Matrix multiplication combines two transformations: if matrix A represents a rotation a translation. Note that
+// matrix multiplication is not commutative - the order matters.
+//
+// The calculation handles the special case of homogenous coordinates, where:
+// - The top-left 3*3 submatrix represents linear transformations (rotation, scale, shear)
+// - The last column represents translation
+// - The implicit last row [0,0,0,1] allows for proper concatenation of transformations.
+//
+// The matrices are conceptually arranged as:
+//
+//	 This matrix (m):           Other matrix (o):
+//		[ m[0]  m[1]  m[2]  m[3] ] [ o[0]  o[1]  o[2]  o[3] ]
+//		[ m[4]  m[5]  m[6]  m[7] ] [ o[4]  o[5]  o[6]  o[7] ]
+//		[ m[8]  m[9]  m[10] m[11]] [ o[8]  o[9]  o[10] o[11]]
+//		[ 0     0     0     1    ] [ 0     0     0     1    ]
+func (m *Matrix4) Multiply(other *Matrix4) *Matrix4 {
+	result := &Matrix4{}
+
+	// First column of result matrix
+	result.Data[0] = other.Data[0]*m.Data[0] + other.Data[4]*m.Data[1] + other.Data[8]*m.Data[2]
+	result.Data[4] = other.Data[0]*m.Data[4] + other.Data[4]*m.Data[5] + other.Data[6]*m.Data[6]
+	result.Data[8] = other.Data[0]*m.Data[8] + other.Data[4]*m.Data[9] + other.Data[8]*m.Data[10]
+
+	// Second column of result matrix
+	result.Data[1] = other.Data[1]*m.Data[0] + other.Data[5]*m.Data[1] + other.Data[9]*m.Data[2]
+	result.Data[5] = other.Data[1]*m.Data[4] + other.Data[5]*m.Data[5] + other.Data[9]*m.Data[6]
+	result.Data[9] = other.Data[1]*m.Data[8] + other.Data[5]*m.Data[9] + other.Data[9]*m.Data[10]
+
+	// Third column of result matrix
+	result.Data[2] = other.Data[2]*m.Data[0] + other.Data[6]*m.Data[1] + other.Data[10]*m.Data[2]
+	result.Data[6] = other.Data[2]*m.Data[4] + other.Data[6]*m.Data[5] + other.Data[10]*m.Data[6]
+	result.Data[10] = other.Data[2]*m.Data[8] + other.Data[6]*m.Data[9] + other.Data[10]*m.Data[10]
+
+	// Fourth column of result matrix (translation component)
+	result.Data[3] = other.Data[3]*m.Data[0] + other.Data[7]*m.Data[1] + other.Data[11]*m.Data[2] + m.Data[3]
+	result.Data[7] = other.Data[3]*m.Data[4] + other.Data[7]*m.Data[5] + other.Data[11]*m.Data[6] + m.Data[7]
+	result.Data[11] = other.Data[3]*m.Data[8] + other.Data[7]*m.Data[9] + other.Data[11]*m.Data[10] + m.Data[11]
+
+	return result
+}
+
+// Returns the determinant of the matrix. The determinant is a scalar value that can be computed from the elements
+// of a square matrix and encodes certain properties of the linear transformation described by the matrix. A matrix
+// is invertible if and only if its determinant is not zero. For this 4*4 matrix, we're actually calculating a simplified
+// determinant that works specifically for the structure of our Matrix4 class, which affine transformations with an implicit bottom
+// row of [0,0,0,1].
+func (mat *Matrix4) GetDeterminant() float32 {
+	return mat.Data[8]*mat.Data[5]*mat.Data[2] +
+		mat.Data[4]*mat.Data[9]*mat.Data[2] +
+		mat.Data[8]*mat.Data[1]*mat.Data[6] -
+		mat.Data[0]*mat.Data[9]*mat.Data[6] -
+		mat.Data[4]*mat.Data[1]*mat.Data[10] +
+		mat.Data[0]*mat.Data[5]*mat.Data[10]
+}
+
+// Sets this matrix to be the inverse of the given matrix. The inverse of a matrix M is another matrix
+func (mat *Matrix4) SetInverse(m *Matrix4) {
+	// Make sure the determinant is non-zero
+	det := m.GetDeterminant()
+	if det == 0 {
+		return
+	}
+
+	// Calculate the inverse determinant once to avoid division in each element.
+	det = 1.0 / det
+
+	// First row
+	mat.Data[0] = (-m.Data[9]*m.Data[6] + m.Data[5]*m.Data[10]) * det
+	mat.Data[4] = (m.Data[8]*m.Data[6] - m.Data[4]*m.Data[10]) * det
+	mat.Data[8] = (-m.Data[8]*m.Data[5] + m.Data[4]*m.Data[9]) * det
+
+	// Second row
+	mat.Data[1] = (m.Data[9]*m.Data[2] - m.Data[1]*m.Data[10]) * det
+	mat.Data[5] = (-m.Data[8]*m.Data[2] + m.Data[0]*m.Data[10]) * det
+	mat.Data[9] = (m.Data[8]*m.Data[1] - m.Data[0]*m.Data[9]) * det
+
+	// Third row
+	mat.Data[2] = (-m.Data[5]*m.Data[2] + m.Data[1]*m.Data[6]) * det
+	mat.Data[6] = (+m.Data[4]*m.Data[2] - m.Data[0]*m.Data[6]) * det
+	mat.Data[10] = (-m.Data[4]*m.Data[1] + m.Data[0]*m.Data[5]) * det
+
+	// Fourth row (translation components)
+	// These have more complex formulas due to the affine transformation structure
+	mat.Data[3] = (m.Data[9]*m.Data[6]*m.Data[3] -
+		m.Data[5]*m.Data[10]*m.Data[3] -
+		m.Data[9]*m.Data[2]*m.Data[7] +
+		m.Data[1]*m.Data[10]*m.Data[7] +
+		m.Data[5]*m.Data[2]*m.Data[11] -
+		m.Data[1]*m.Data[6]*m.Data[11]) * det
+
+	mat.Data[7] = (-m.Data[8]*m.Data[6]*m.Data[3] +
+		m.Data[4]*m.Data[10]*m.Data[3] +
+		m.Data[8]*m.Data[2]*m.Data[7] -
+		m.Data[0]*m.Data[10]*m.Data[7] -
+		m.Data[4]*m.Data[2]*m.Data[11] +
+		m.Data[0]*m.Data[6]*m.Data[11]) * det
+
+	mat.Data[11] = (m.Data[8]*m.Data[5]*m.Data[3] -
+		m.Data[4]*m.Data[9]*m.Data[3] -
+		m.Data[8]*m.Data[1]*m.Data[7] +
+		m.Data[0]*m.Data[9]*m.Data[7] +
+		m.Data[4]*m.Data[1]*m.Data[11] -
+		m.Data[0]*m.Data[5]*m.Data[11]) * det
+}
+
+// Returns a new matrix containing the inverse of this matrix.
+func (mat *Matrix4) Inverse() *Matrix4 {
+	var result *Matrix4
+	result.SetInverse(mat)
+	return result
+}
+
+// Inverts the matrix in place.
+func (mat *Matrix4) Invert() {
+	mat.SetInverse(mat)
+}
+
+// Sets this matrix to be a combined rotation and translation matrix. The rotation is specified by a quaternion and
+// the translation by a position vector.
+func (mat *Matrix4) SetOrientationAndPos(q *Quaternion, pos *Vector) {
+	mat.Data[0] = 1 - 2*(q.J*q.J+q.K*q.K)
+	mat.Data[1] = 2*(q.I*q.J) + 2*q.K*q.R
+	mat.Data[2] = 2*q.I*q.K - 2*q.J*q.R
+
+	mat.Data[4] = 2*q.I*q.J - 2*q.K*q.R
+	mat.Data[5] = 1 - 2(q.I*q.I+q.K*q.K)
+	mat.Data[6] = 2*q.J*q.K + 2*q.I*q.R
+
+	mat.Data[8] = 2*q.I*q.K + 2*q.J*q.R
+	mat.Data[9] = 2*q.J*q.K - 2*q.I*q.R
+	mat.Data[10] = 1 - 2*(q.I*q.I+q.J*q.J)
+
+	mat.Data[3] = float32(pos.X)
+	mat.Data[7] = float32(pos.Y)
+	mat.Data[11] = float32(pos.Z)
+}
+
+// Transforms a vector by the inverse of this matrix without actually without actually calculating the full inverse matrix.
+// This is more efficient when you only need to transform a single vector by the inverse transformation.
+// This method works by:
+// 1. Subtracting the translation component (undoing the translation)
+// 2. Applying the inverse of the rotation component (which is the transpose of the rotation matrix, asssuming it's orthogonal)
+func (mat *Matrix4) TransformInverse(vector *Vector) *Vector {
+	// First undo the translation
+	tmp := Vector{
+		X: vector.X - Real(mat.Data[3]),
+		Y: vector.Y - Real(mat.Data[7]),
+		Z: vector.Z - Real(mat.Data[11]),
+	}
+
+	return &Vector{
+		X: tmp.X*Real(mat.Data[0]) + tmp.Y*Real(mat.Data[4]) + tmp.Z*Real(mat.Data[8]),
+		Y: tmp.X*Real(mat.Data[1]) + tmp.Y*Real(mat.Data[5]) + tmp.Z*Real(mat.Data[9]),
+		Z: tmp.X*Real(mat.Data[2]) + tmp.Y*Real(mat.Data[6]) + tmp.Z*Real(mat.Data[10]),
+	}
+}
+
+// Transforms a direction vector by this matrix, ignoring the translation component.
+// Direction vectors represent orientation rather than position, so translation should not be
+// applied to them. This method uses only the rotational portion of the matrix to transform the vector.
+// Unlike TransformInverse, this method applies the matrix  directly  to the vector without first undoing
+// any translation, because direction vectors are invariant to translation.
+func (mat *Matrix4) TransformDirection(vector *Vector) *Vector {
+	return &Vector{
+		X: vector.X*Real(mat.Data[0]) + vector.Y*Real(mat.Data[1]) + vector.Z*Real(mat.Data[2]),
+		Y: vector.X*Real(mat.Data[4]) + vector.Y*Real(mat.Data[5]) + vector.Z*Real(mat.Data[6]),
+		Z: vector.X*Real(mat.Data[8]) + vector.Y*Real(mat.Data[9]) + vector.Z*Real(mat.Data[10]),
+	}
+}
+
+// Transforms a direction vector by the inverse of the rotational part of this matrix. For an orthogonal rotation
+// matrix, the inverse is the same as the transpose. This method effectively multiplies the vector by the transpose of the 3*3
+// rotation portion of the matrix.
+// This is useful for transforming normals or directions from world space to local space without having to calculate the full inverse matrix.
+func (mat *Matrix4) TransformInverseDirection(vector *Vector) *Vector {
+	return &Vector{
+		X: vector.X*Real(mat.Data[0]) + vector.Y*Real(mat.Data[4]) + vector.Z*Real(mat.Data[8]),
+		Y: vector.X*Real(mat.Data[1]) + vector.Y*Real(mat.Data[5]) + vector.Z*Real(mat.Data[9]),
+		Z: vector.X*Real(mat.Data[2]) + vector.Y*Real(mat.Data[6]) + vector.Z*Real(mat.Data[10]),
+	}
+}
+
+// Transforms a point from local space to world space using the given transformation matrix.
+func LocalToWorld(local *Vector, transform *Matrix4) *Vector {
+	return transform.Transform(local)
+}
+
+// Transforms a point from world space to local space using the inverse of the given transformation matrix.
+func WorldToLocal(world *Vector, transform *Matrix4) *Vector {
+	return transform.TransformInverse(world)
+}
