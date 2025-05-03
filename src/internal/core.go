@@ -593,3 +593,100 @@ func LocalToWorld(local *Vector, transform *Matrix4) *Vector {
 func WorldToLocal(world *Vector, transform *Matrix4) *Vector {
 	return transform.TransformInverse(world)
 }
+
+// Holds a three-degrees-of-freedom orientation. It represents rotations in 3D space using a four-dimensional
+// complex number with a real part and three imaginary parts.
+type Quaternion struct {
+	R float32 // The real component of the quaternion
+	I float32
+	J float32
+	K float32
+}
+
+// Returns the quaternion components as a slice, allowing array-like access to the quaternion elements.
+func (q *Quaternion) Data() [4]float32 {
+	return [4]float32{q.R, q.I, q.J, q.K}
+}
+
+// Adjusts the quaternion to have unit length, making it a valid orientation quaternion.
+// A unit quaternion is required for proper rotation operations. This method scales the quaternion components
+// so that the sum of their squares equals 1.
+// If the quaternion has zero length (all components are zero), it's replaced with the identity quaternion (1,0,0,0) representing no rotation.
+func (q *Quaternion) Normalize() {
+	// Calculate the squared magnitude of the quaternion
+	d := q.R*q.R + q.I*q.I + q.J*q.J + q.K*q.K
+
+	// Check for zero-length quaternion, and use the no-rotation quaternion in that case.
+	if d == 0 {
+		q.R = 1
+		return
+	}
+
+	// Scale by inverse of the magitude to normalize
+	d = float32(1.0 / Sqrt(Real(d)))
+	q.R *= float32(d)
+	q.I *= float32(d)
+	q.J *= float32(d)
+	q.K *= float32(d)
+}
+
+// Represents the combination of two rotations. When two quaternions are multiplied, the resulting quaternion represents a rotation
+// that is equivalent to applying the second rotation followed by the first.
+//
+// The multiplication follows the Hamilton product formula for quaternions:
+// (q1 * q2).r = q1.r*q2.r - q1.i*q2.i - q1.j*q2.j - q1.k*q2.k
+// (q1 * q2).i = q1.r*q2.i + q1.i*q2.r + q1.j*q2.k - q1.k*q2.j
+// (q1 * q2).j = q1.r*q2.j + q1.j*q2.r + q1.k*q2.i - q1.i*q2.k
+// (q1 * q2).k = q1.r*q2.k + q1.k*q2.r + q1.i*q2.j - q1.j*q2.i
+func (q *Quaternion) MultiplyWith(multiplier *Quaternion) {
+	// Store original values to avoid interference during calculation
+	qr, qi, qj, qk := q.R, q.I, q.J, q.K
+
+	q.R = qr*multiplier.R - qi*multiplier.I - qj*multiplier.J - qk*multiplier.K
+	q.I = qr*multiplier.I + qi*multiplier.R + qj*multiplier.K - qk*multiplier.J
+	q.J = qr*multiplier.J + qj*multiplier.R + qk*multiplier.I - qi*multiplier.K
+	q.K = qr*multiplier.K + qk*multiplier.R + qi*multiplier.J - qj*multiplier.I
+}
+
+// Rotates this quaternion by a vector.
+//
+// This method creates a rotation quaternion from the given vector and multiplies this quaternion by it. The vector's components are used as the imaginary
+// parts of a quaternion with a rela part of zero.
+//
+// This operation can be used to apply an angular velocity to an orientation quaternion, where the vector represents the axis and magnitude of rotation.
+func (q *Quaternion) RotateByVector(vector *Vector) {
+	// Create a quaternion with the vector components as the imaginary parts
+	rotationQ := &Quaternion{
+		R: 0,
+		I: float32(vector.X),
+		J: float32(vector.Y),
+		K: float32(vector.Z),
+	}
+
+	q.MultiplyWith(rotationQ)
+}
+
+// Adds a scaled vector to this quaternion.
+//
+// This method is commonly used to update an orientation quaternion by an angular velocity over time. The vector represents
+// the angular velocity axis and magnitude, and the scale parameter is typically the time delta.
+//
+// The operation creates a rotation quaternion from the scaled vector, multiplies it with this quaternion, and then adds
+// half of the result of this quaternion. This approximates the integration of angular velocity to update orientation.
+func (q *Quaternion) AddScaledVector(vector *Vector, scale float32) {
+	rotationQ := &Quaternion{
+		R: 0,
+		I: float32(vector.X) * scale,
+		J: float32(vector.Y) * scale,
+		K: float32(vector.Z) * scale,
+	}
+
+	// Multiply by the current orientation
+	rotationQ.MultiplyWith(q)
+
+	// Add half of the resulting quaternion to the current orientation
+	q.R += rotationQ.R * 0.5
+	q.I += rotationQ.I * 0.5
+	q.J += rotationQ.J * 0.5
+	q.K += rotationQ.K * 0.5
+}
