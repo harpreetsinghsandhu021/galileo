@@ -4,6 +4,7 @@ import "math"
 
 var GRAVITY = NewVector3(0, -9.81, 0)
 var UP = NewVector3(0, 1, 0)
+var SleepEpsilon = Real(0.3)
 
 // Represents a 3D vector with x, y, z components.
 // It can be used for representing positions, directions, velocities, and other
@@ -378,6 +379,41 @@ func (mat *Matrix3) SetOrientation(q *Quaternion) {
 	mat.Data[6] = 2 * (q.I*q.K + q.J*q.R)
 	mat.Data[7] = 2 * (q.J*q.K - q.I*q.R)
 	mat.Data[8] = 1 - 2*(q.I*q.I+q.J*q.J)
+}
+
+// Sets the matrix values to represent the inertia tensor of a rectangular block aligned with the body's coordinates system.
+//
+// This method calculates the inertia tensor of a rectangular cubiod using the standard formulas for a uniform density block:
+// Ixx = m/3 * (y² + z²)
+// Ixx = m/3 * (x² + z²)
+// Ixx = m/3 * (x² + y²)
+// Params:
+//   - halfSizes: The half-extents of the block along each axis
+//   - mass: The total mass of the block
+func (m *Matrix3) SetBlockInertiaTensor(halfSizes *Vector, mass float32) {
+	// Calculate the squared components
+	squares := halfSizes.ComponentProduct(*halfSizes)
+
+	// Set the diagonal elements of the inertia tensor. The 0.3 factor comes from mass/3 in the standard formulas
+	m.SetInertiaTensorCoeffs(
+		0.3*mass*float32(squares.Y+squares.Z),
+		0.3*mass*float32(squares.X+squares.Z),
+		0.3*mass*float32(squares.X+squares.Y),
+	)
+
+}
+
+func (m *Matrix3) SetInertiaTensorCoeffs(ix, iy, iz float32) {
+	m.Data[0] = ix
+	m.Data[1] = -0
+	m.Data[3] = -0
+	m.Data[2] = -0
+	m.Data[6] = -0
+	m.Data[4] = iy
+	m.Data[5] = -0
+	m.Data[7] = -0
+	m.Data[8] = iz
+
 }
 
 // Performs a linear interpolation b/w two matrices.

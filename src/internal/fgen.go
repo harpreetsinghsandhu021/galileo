@@ -219,3 +219,36 @@ func (ac *AeroControl) UpdateForce(body *RigidBody, duration float32) {
 	tensor := ac.GetTensor()
 	ac.updateForceFromTensor(body, duration, tensor)
 }
+
+func (ac *AeroControl) SetControl(value float32) {
+	ac.ControlSetting = value
+}
+
+// Holds all the force generators and the bodies they apply to.
+type ForceRegistry struct {
+	registrations []*ForceRegistration
+}
+
+// Keeps track of one force generator and the body it applies to.
+//
+// This structure represents a connection b/w a specific force generator and a rigid body. The force
+// generator will apply its force to the specified body when the forces are updated.
+type ForceRegistration struct {
+	Body *RigidBody
+	Fg   ForceGenerator
+}
+
+// Registers the given force generator to apply to the given body
+func (fr *ForceRegistry) Add(body *RigidBody, fg ForceGenerator) {
+	fr.registrations = append(fr.registrations, &ForceRegistration{
+		Body: body,
+		Fg:   fg,
+	})
+}
+
+// Calls all the force generators to update the forces of their corresponding bodies.
+func (fr *ForceRegistry) UpdateForces(duration float32) {
+	for _, reg := range fr.registrations {
+		reg.Fg.UpdateForce(reg.Body, duration)
+	}
+}
