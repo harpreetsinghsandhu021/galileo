@@ -200,6 +200,13 @@ func (v *Vector) Cross(other *Vector) *Vector {
 	return v.VectorProduct(other)
 }
 
+// Zero all components of the vector.
+func (v *Vector) Clear() {
+	v.X = 0
+	v.Y = 0
+	v.Z = 0
+}
+
 // Holds a 3*3 row major matrix representing a transformation in 3D space that does not include
 // a translational component. This matrix is not padded to produce an aligned structure.
 type Matrix3 struct {
@@ -208,7 +215,7 @@ type Matrix3 struct {
 
 // Transforms the given vector by this matrix. The transformation applies the matrix to the vector using
 // standard matrix-vector multiplication rules, where each component of the resulting vector is the dot
-// product of a row of the matrix with the inpyut vector.
+// product of a row of the matrix with the input vector.
 func (m *Matrix3) MultiplyVector(vector *Vector) *Vector {
 	return NewVector3(
 		vector.X*Real(m.Data[0])+vector.Y*Real(m.Data[1])+vector.Z*Real(m.Data[2]),
