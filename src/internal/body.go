@@ -44,6 +44,10 @@ type RigidBody struct {
 	Acceleration *Vector
 	// Holds the inverse inertia tensor of the body in world space.
 	InverseInertiaTensorWorld *Matrix3
+	// Holds the amount of motion of the body. This is a recency weighted mean that can be used to put a body to sleep.
+	Motion Real
+	// Some bodies may never be allowed to fall asleep. User controlled bodies, for example, should be always awake.
+	CanSleep bool
 }
 
 // Updates internal data from the state data.
@@ -338,4 +342,77 @@ func (rb *RigidBody) GetVelocity() *Vector {
 
 func (rb *RigidBody) GetTransform() *Matrix4 {
 	return rb.TransformMatrix
+}
+
+func (rb *RigidBody) SetMass(mass Real) {
+	if mass == 0 {
+		return
+	}
+
+	rb.InverseMass = float32(1.0 / mass)
+}
+
+func (rb *RigidBody) SetDamping(linearDamping Real, angularDamping Real) {
+	rb.LinearDamping = float32(linearDamping)
+	rb.AngularDamping = angularDamping
+}
+
+func (rb *RigidBody) SetAcceleration(acceleration *Vector) {
+	rb.Acceleration = acceleration
+}
+
+// Sets the awake state of the body.
+func (rb *RigidBody) SetAwake(awake bool) {
+	if awake {
+		rb.IsAwake = true
+
+		// Add a bit of motion to avoid it falling asleep immediately
+		rb.Motion = SleepEpsilon * 2.0
+	} else {
+		rb.IsAwake = false
+		rb.Velocity.Clear()
+		rb.Rotation.Clear()
+	}
+}
+
+// Sets whether the body is ever allowed to go to sleep. Bodies under the player's control, or for which the set of transient forces
+// applied each frame are not predictable, should be kept awake.
+func (rb *RigidBody) SetCanSleep(canSleep bool) {
+	rb.CanSleep = canSleep
+
+	if !rb.CanSleep && !rb.IsAwake {
+		rb.SetAwake(true)
+	}
+}
+
+// Sets the position of the rigid body.
+func (rb *RigidBody) SetPosition(x Real, y Real, z Real) {
+	rb.Position.X = x
+	rb.Position.Y = y
+	rb.Position.Z = z
+}
+
+func (rb *RigidBody) SetOrientation(r, i, j, k Real) {
+	rb.Orientation.R = float32(r)
+	rb.Orientation.I = float32(i)
+	rb.Orientation.J = float32(j)
+	rb.Orientation.K = float32(k)
+
+	rb.Orientation.Normalize()
+}
+
+func (rb *RigidBody) SetVelocity(x, y, z Real) {
+	rb.Velocity.X = x
+	rb.Velocity.Y = y
+	rb.Velocity.Z = z
+}
+
+func (rb *RigidBody) SetRotation(x, y, z Real) {
+	rb.Rotation.X = x
+	rb.Rotation.Y = y
+	rb.Rotation.Z = z
+}
+
+func (rb *RigidBody) GetPosition() *Vector {
+	return rb.Position
 }

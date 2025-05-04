@@ -2,7 +2,8 @@ package internal
 
 // Manages a collection of rigid bodies and provides the infrastructure to simulate their physical behavior over time.
 type World struct {
-	Bodies []*RigidBody // Holds the rigid bodies being simulated
+	Bodies   []*RigidBody // Holds the rigid bodies being simulated
+	Registry *ForceRegistry
 }
 
 // Initializes the world for a simulation frame.
@@ -38,9 +39,7 @@ func (w *World) Integrate(duration float32) {
 // 1. Applying forces from all registered force generators
 // 2. Integrating the motion of all bodies
 func (w *World) RunPhysics(duration float32) {
-	w.UpdateForces(duration)
+	w.Registry.UpdateForces(duration)
 
 	w.Integrate(duration)
 }
-
-func (w *World) UpdateForces(duration float32)
