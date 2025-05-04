@@ -109,3 +109,113 @@ func (s *Spring) UpdateForce(body *RigidBody, duration float32) {
 	// Apply the force at the connection point on the body
 	body.AddForceAtPoint(force, lws)
 }
+
+// A Force generator that applies aerodynamic forces to rigid bodies.
+//
+// Aerodynamic forces depend on the velocity of the body relative to the fluid (typically air), the orientation of the body,
+// and the shape of the surfaces. This generator models these forces using an aerodynamic tensor that relates velocity to force
+// for a particular surface shape.
+//
+// The aerodynamic force is calculated as:
+// F = -v` * T * v
+// where:
+// F is the resulting force
+// v is the relative velocity of the body through the fluid
+// v` is the tranpose of v
+// T is the aerodynamic tensor
+//
+// This model can represent various aerodynamic effects including:
+// - Drag: resistance to motion through the fluid
+// - Lift: perpendicular to force from assymetric airflow
+// - Torque: rotational force from off-cennter aerodynamic effects
+type Aero struct {
+	// Holds the aerodynamic tensor for the surface in body space. This 3*3 matrix transforms the relative velocity into a force,
+	// representing how the surface interacts with the fluid from different directions.
+	Tensor *Matrix3
+	// Holds the relative position of the aerodynamic surface in body coordinates. This is the point at which the aerodynamic force
+	// is applied, which may not be at the center of mass, allowing aerodynamic forces to create torque.
+	Position *Vector
+	// Holds the wind speed of the enviroment.
+	Windspeed *Vector
+}
+
+// Applies the aerodynamic force to the given rigid body.
+func (a *Aero) UpdateForce(body *RigidBody, duration float32) {
+	a.updateForceFromTensor(body, duration, a.Tensor)
+}
+
+// Uses an explicit tensor matrix to update the force on the given rigid body.
+//
+// Calculates and applies the aerodynamic force based on the body's velocity, the wind speed, and the provided aerodynamic tensor.
+// The process is:
+// 1. Calculate the velocity of the body relative to the fluid(air) by combining the body's velocity with the wind speed.
+// 2. Transform this velocity into the body's local coordinate system, since the aerodynamic tensor is defined in body space.
+// 3. Apply the tensor to the velocity to get the resulting force in body space F = T * v (where T is the tensor and v is the relative velocity)
+// 4. Transform the force back to world space coordinates
+// 5. Apply the force at the specified position in the body
+// Params:
+//   - body: The rigid body to apply force to
+//   - duration: The time step of the simulation
+//   - tensor: The aerodynamic tensor to use for this calculation
+func (a *Aero) updateForceFromTensor(body *RigidBody, duration float32, tensor *Matrix3) {
+	// Calculate total velocity (wind speed and body's velocity)
+	// This gives us the velocity of the body relative to the fluid
+	velocity := body.GetVelocity()
+	velocity = velocity.Add(a.Windspeed)
+
+	// Calculate the velocity in body coordinates
+	// This is needed because the tensor is defined in body space
+	bodyVel := body.GetTransform().TransformInverseDirection(velocity)
+
+	// Calculate the force in body corrdinates by applying the tensor
+	// This transforms the velocity into a force according to the aerodynamic properties of the surface
+	bodyForce := tensor.Transform(bodyVel)
+
+	// Transform the force back to world coordinates
+	force := body.GetTransform().TransformDirection(bodyForce)
+
+	body.AddForceAtBodyPoint(force, a.Position)
+}
+
+// A Force generator with a controllable aerodynamic surface.
+//
+// This generator extends the basic Aero force generator by allowing the aerodynamic properties to be adjusted dynamically. This
+// simulates control surfaces like flaps, ailerons, rudders, or elevators on aircraft, which change the airflow and resulting forces by adjusting their angle.
+//
+// The control is represented by a setting value b/w -1 and +1, which interpolates b/w three tensors:
+// At -1: The minimum tensor is used (e.g., control surface fully down)
+// At 0: The base tensor is used (e.g., control surface neutral)
+// At +1: The maximum tensor is used (e.g., control surface fully up)
+//
+// The interpolation allows for smooth transitions b/w different aerodynamic configurations.
+type AeroControl struct {
+	Aero
+	// Holds the aerodynamic tensor for the surface when the control is at its maximum value(+1).
+	MaxTensor *Matrix3
+	// Holds the aerodynamic tensor for the surface when the control is at its minimum value(-1).
+	MinTensor *Matrix3
+	// Represents the current position of the control surface. It ranges from -1 through 0 to +1.
+	// Values outside this range may give undefined results.
+	ControlSetting float32
+}
+
+// Calculates the final aerodynamic tensor for the current control setting.
+func (ac *AeroControl) GetTensor() *Matrix3 {
+	if ac.ControlSetting <= -1.0 {
+		return ac.MinTensor
+	} else if ac.ControlSetting >= 1.0 {
+		return ac.MaxTensor
+	} else if ac.ControlSetting < 0 {
+		return Matrix3LinearInterpolate(ac.MinTensor, ac.Tensor, ac.ControlSetting+1.0)
+	} else if ac.ControlSetting > 0 {
+		return Matrix3LinearInterpolate(ac.Tensor, ac.MaxTensor, ac.ControlSetting)
+	} else {
+		return ac.Tensor
+	}
+}
+
+// Applies the aerodynamic force to the given rigid body.
+func (ac *AeroControl) UpdateForce(body *RigidBody, duration float32) {
+	tensor := ac.GetTensor()
+	ac.updateForceFromTensor(body, duration, tensor)
+}

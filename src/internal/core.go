@@ -380,6 +380,22 @@ func (mat *Matrix3) SetOrientation(q *Quaternion) {
 	mat.Data[8] = 1 - 2*(q.I*q.I+q.J*q.J)
 }
 
+// Performs a linear interpolation b/w two matrices.
+//
+// Creates a new matrx by linearly interpolating b/w each corresponding element of the source matrices. The interpolation
+// is controlled by the prop parameter:
+// - When prop = 0: Returns matrix a
+// - When prop = 1: Returns matrix b
+// - When 0 < prop < 1: Returns a weighted blend of a and b
+func Matrix3LinearInterpolate(a, b *Matrix3, prop float32) *Matrix3 {
+	var result *Matrix3
+	for i := 0; i < 9; i++ {
+		result.Data[i] = a.Data[i]*(1-prop) + b.Data[i]*prop
+	}
+
+	return result
+}
+
 // Holds a transform matrix, consisting of a rotation matrix and a position. The matrix has 12
 // elements, and it is assumed that the remaining four are (0,0,0,1) producing a homogeneous matrix.
 type Matrix4 struct {

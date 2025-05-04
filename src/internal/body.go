@@ -331,3 +331,11 @@ func (rb *RigidBody) Integrate(duration float32) {
 	// Clear accumulators for next frame. Forces and torques don't accumulate b/w frames - they are recalculated on each frame
 	rb.ClearAccumulators()
 }
+
+func (rb *RigidBody) GetVelocity() *Vector {
+	return rb.Velocity
+}
+
+func (rb *RigidBody) GetTransform() *Matrix4 {
+	return rb.TransformMatrix
+}
