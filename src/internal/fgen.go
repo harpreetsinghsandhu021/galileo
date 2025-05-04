@@ -252,3 +252,25 @@ func (fr *ForceRegistry) UpdateForces(duration float32) {
 		reg.Fg.UpdateForce(reg.Body, duration)
 	}
 }
+
+// A Force generator to apply a buoyant force to rigid body.
+type Buoyancy struct {
+	// The max submersion depth of the object before it generates its maximum buoyancy force.
+	MaxDepth Real
+	Volume   Real
+	// The height of the water plane above y=0. The plane will be parallel to XZ plane.
+	WaterHeight      Real
+	LiquidDensity    Real
+	CentreOfBuoyancy Real
+}
+
+// A Force generator with an aerodynamic surface that can be reoriented relative ot its rigid body.
+type AngledAero struct {
+	orientation *Quaternion
+}
+
+func NewAngledAero(tensor *Matrix3, position *Vector, windspeed *Vector) {}
+
+func (a *AngledAero) SetOrientation(quaternion *Quaternion) {}
+
+func (a *AngledAero) UpdateForce(body *RigidBody, duration Real) {}
