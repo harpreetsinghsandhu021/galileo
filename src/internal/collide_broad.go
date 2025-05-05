@@ -1,6 +1,8 @@
 package internal
 
-import "math"
+import (
+	"math"
+)
 
 // Stores a potential contact between two bodies.
 // This struct is used to store the bodies that might be in contact with each other.
@@ -12,6 +14,8 @@ type PotentialContact struct {
 // Represents a node in bounding volume heirarchy. This is used to represent a node in the heirarchy, which
 // can be either a leaf node or an internal node.
 type BVHNode struct {
+	// Holds the node immediately above us in the tree.
+	parent *BVHNode
 	// Holds the child nodes of this node representing the left and right child nodes.
 	Children [2]*BVHNode
 	// Holds a single bounding volume encompassing all the descendants of this node.
@@ -84,6 +88,95 @@ func (n *BVHNode) Overlaps(other *BVHNode) bool {
 	return n.Volume.Radius+other.Volume.Radius >= float64(Sqrt(Pow(Real(n.Volume.Radius), 2)+Pow(Real(other.Volume.Radius), 2)))
 }
 
+// Inserts the given rigid body, with thte given bounding volume into te hierarchy. This may involve the creation of further bounding volume nodes.
+func (n *BVHNode) Insert(body *RigidBody, volume *BoundingSphere) {
+	// If we are a leaf, then the only option is to spawn two new children and place the new body in one
+	if n.IsLeaf() {
+		// Child one is a copy of us
+		n.Children[0] = &BVHNode{
+			Volume: n.Volume,
+			Body:   n.Body,
+		}
+
+		// Child two holds the new body
+		n.Children[1] = &BVHNode{
+			Volume: volume,
+			Body:   body,
+		}
+
+		n.Body = nil // We lose the body, (we're no longer a leaf)
+
+		n.recalculateBoundingVolume(true)
+	} else {
+		// Otherwise, we need to work out which child gets to keep the inserted body. We give it to whoever would grow the least to incorporate it.
+		if n.Children[0].Volume.GetGrowth(volume) < n.Children[1].Volume.GetGrowth(volume) {
+			n.Children[0].Insert(body, volume)
+		} else {
+			n.Children[1].Insert(body, volume)
+		}
+	}
+}
+
+// Recalculates the bounding volume of the node.
+//
+// This function is used to update the bounding volume of the node after changes have been made to its children the node itself. It is typically
+// called after a node has been inserted or removed from the hierarchy.
+//
+// If the node is not a leaf node node, the method calculates the new bounding volume of the node by combining the bounding volumes of its two children.
+// This is done using `NewBoundingSphereFromSphere` function, which creates a new bounding sphere that encloses the two child spheres.
+//
+// Finally, If the `recurse` parameter is true, the method calls itself recursively on the node's parent, to propogate the changes up the hierarchy.
+func (n *BVHNode) recalculateBoundingVolume(recurse bool) {
+	if n.IsLeaf() {
+		return
+	}
+
+	n.Volume = NewBoundingSphereFromSphere(n.Children[0].Volume, n.Children[1].Volume)
+
+	if recurse && n.parent != nil {
+		n.parent.recalculateBoundingVolume(true)
+	}
+}
+
+// Deletes this node, removing it first from the hierarchy along with its associated rigid body and child nodes.
+//
+// This method is responsible for cleaning up any resources associated with the node, including its children and sibling nodes. It also updates the
+// parent node's bounding volume to reflect the change.
+func (n *BVHNode) Delete() {
+	// Check if the node has a parent node. If not, we can skip the sibling processing.
+	if n.parent != nil {
+		// Find the sibling node. This is the other child node of the parent node
+		sibling := n.parent.Children[0]
+		if sibling == n {
+			// If the sibling is the same as the current node, use the other child node
+			sibling = n.parent.Children[1]
+		}
+
+		// Copy the sibling node's data to the parent node. This effectively replaces the current node with its sibling in the hierarchy.
+		n.parent.Volume = sibling.Volume
+		n.parent.Body = sibling.Body
+		n.parent.Children[0] = sibling.Children[0]
+		n.parent.Children[1] = sibling.Children[1]
+
+		// Delete the sibling node. We set its parent and children to nil to avoid any potential cycles that could prevent the GB from freeing memory.
+		sibling.parent = nil
+		sibling.Body = nil
+		sibling.Children[0] = nil
+		sibling.Children[1] = nil
+
+		// Recalculate the parent node's bounding volume to reflect the changes.
+		n.parent.recalculateBoundingVolume(true)
+	}
+
+	// Delete the child nodes. We set their parent to nil to avoid any potential cycles.
+	if n.Children[0] != nil {
+		n.Children[0].parent = nil
+	}
+	if n.Children[1] != nil {
+		n.Children[1].parent = nil
+	}
+}
+
 // Represents a bounding sphere that can be tested for overlap
 type BoundingSphere struct {
 	Center *Vector
@@ -98,8 +191,16 @@ func NewBoundingSphere(center *Vector, radius float64) *BoundingSphere {
 	}
 }
 
+// Returns the volume of the bounding sphere.
 func (s *BoundingSphere) GetSize() float64 {
 	return (4.0 / 3.0) * math.Pi * math.Pow(s.Radius, 2)
+}
+
+// Calculates the growth in volume required to enclose the given other sphere. The "growth" is the increase in volume required to enclose the
+// other sphere. This is used when adding a new sphere to the hierarchy to work out which node to add it to.
+func (s *BoundingSphere) GetGrowth(other *BoundingSphere) float64 {
+	newRadius := math.Sqrt(math.Pow(s.Radius, 2) + math.Pow(other.Radius, 2))
+	return math.Pow(newRadius, 2) - math.Pow(s.Radius, 2)
 }
 
 // Creates a bounding sphere to enclose the two given bounding spheres
