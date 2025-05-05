@@ -586,7 +586,7 @@ func (mat *Matrix4) SetOrientationAndPos(q *Quaternion, pos *Vector) {
 	mat.Data[2] = 2*q.I*q.K - 2*q.J*q.R
 
 	mat.Data[4] = 2*q.I*q.J - 2*q.K*q.R
-	mat.Data[5] = 1 - 2(q.I*q.I+q.K*q.K)
+	mat.Data[5] = 1 - 2*(q.I*q.I+q.K*q.K)
 	mat.Data[6] = 2*q.J*q.K + 2*q.I*q.R
 
 	mat.Data[8] = 2*q.I*q.K + 2*q.J*q.R
