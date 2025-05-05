@@ -5,7 +5,8 @@ import (
 
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
-	"github.com/go-gl/glu"
+
+	// "github.com/go-gl/glu"
 	"github.com/harpreetsingh/galileo/src/internal"
 )
 
@@ -192,11 +193,11 @@ func (demo *FlightSimDemo) Display() {
 	offset := internal.NewVector3(4.0+demo.Aircraft.GetVelocity().Magnitude(), 0, 0)
 	offset = demo.Aircraft.GetTransform().TransformDirection(offset)
 
-	glu.LookAt(
-		float64(pos.X+offset.X), float64(pos.Y+5.0), float64(pos.Z+offset.Z),
-		float64(pos.X), float64(pos.Y), float64(pos.Z),
-		0.0, 1.0, 0.0,
-	)
+	// glu.LookAt(
+	// 	float64(pos.X+offset.X), float64(pos.Y+5.0), float64(pos.Z+offset.Z),
+	// 	float64(pos.X), float64(pos.Y), float64(pos.Z),
+	// 	0.0, 1.0, 0.0,
+	// )
 
 	// Draw the ground grid
 	gl.Color3f(0.6, 0.6, 0.6)
@@ -215,9 +216,9 @@ func (demo *FlightSimDemo) Display() {
 	gl.End()
 
 	// Set the transform matrix for the aircraft
-	transform := demo.Aircraft.GetTransform()
+	// transform := demo.Aircraft.GetTransform()
 	var glTransform [16]float32
-	transform.FillGLArray(glTransform[:])
+	// transform.FillGLArray(glTransform[:])
 
 	gl.PushMatrix()
 	gl.MultMatrixf(&glTransform[0])
@@ -230,7 +231,7 @@ func (demo *FlightSimDemo) Display() {
 	// Draw shadow
 	gl.Color3f(0.8, 0.8, 0.8)
 	gl.PushMatrix()
-	gl.Translatef(0, -1.0-pos.Y, 0)
+	gl.Translatef(0, float32(-1.0-pos.Y), 0)
 	gl.Scalef(1.0, 0.001, 1.0)
 	gl.MultMatrixf(&glTransform[0])
 	DrawAircraft()

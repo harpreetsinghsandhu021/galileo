@@ -32,7 +32,7 @@ func NewBridgeDemo() *BridgeDemo {
 
 	// Create the masses and connections
 	for i := 0; i < 12; i++ {
-		x := (i % 12) / 2
+		// x := (i % 12) / 2
 		demo.ParticleArray[i].SetPosition(internal.NewVector3(internal.Real((i/2)*2.0-5.0), 4, internal.Real(i%2)*2.0-1.0))
 		demo.ParticleArray[i].SetVelocity(internal.NewVector3(0, 0, 0))
 		demo.ParticleArray[i].SetDamping(0.9)
