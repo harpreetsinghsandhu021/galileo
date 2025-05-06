@@ -643,6 +643,11 @@ func (mat *Matrix4) TransformInverseDirection(vector *Vector) *Vector {
 	}
 }
 
+// Gets a vector representing one axis (i.e one column) in the matrix.
+func (mat *Matrix4) GetAxisVector(i int) *Vector {
+	return NewVector3(Real(mat.Data[i]), Real(mat.Data[i+4]), Real(mat.Data[i+8]))
+}
+
 // Transforms a point from local space to world space using the given transformation matrix.
 func LocalToWorld(local *Vector, transform *Matrix4) *Vector {
 	return transform.Transform(local)
