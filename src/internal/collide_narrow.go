@@ -1,11 +1,22 @@
 package internal
 
+import "math"
+
 // A Helper structure that contains information for the detector to use in building its contact data.
 type CollisionData struct {
 	Contacts     []*Contact
 	ContactsLeft int
 	Friction     Real
 	Restitution  Real
+	ContactCount uint
+}
+
+// Notifies the data that the given number of contacts have been added
+func (cd *CollisionData) AddContacts(count uint) {
+	cd.ContactsLeft -= int(count)
+	cd.ContactCount += count
+
+	cd.Contacts = cd.Contacts[count:]
 }
 
 // Represents a primitive to detect collisions against
@@ -324,4 +335,297 @@ func (cd *CollisionDetector) BoxAndSphere(box *CollisionBox, sphere *CollisionSp
 	data.ContactsLeft--
 
 	return 1
+}
+
+// Calculates the overlap b/w two boxes along a given axis
+// Params:
+//
+//	one: First collision box
+//	two: Second collision box
+//	axis: The axis along which to check penetration
+//	toCenter: Vector from center of box one to center of box two
+//
+// Returns:
+//
+//	float64: Penetration depth
+//	- positive value indicates boxes are overlapping
+//	- Negative value indicates boxes are seperated
+//	- Larger positive values mean deeper penetration
+func penetrationOnAxis(one *CollisionBox, two *CollisionBox, axis, toCenter *Vector) float64 {
+	// Calculate the projection of the box's extents onto the axis
+	// This gives us half the length of box's when projected onto the axis
+	oneProject := TransformToAxis(one, axis)
+	twoProject := TransformToAxis(two, axis)
+
+	// Calculate the distance b/w box centers along the axis along the axis
+	distance := Abs(toCenter.ScalarProduct(axis))
+
+	// Calculate and return the overlap:
+	// - Sum of projections (oneProject + twoProject) gives total reach of both boxes
+	// - Subtracting the distance gives us the overlap
+	return float64(oneProject) + float64(twoProject) - float64(distance)
+}
+
+// Tests if two boxes are colliding along a given axis and updates the smallest found
+// Params:
+//
+//	one: First collision box
+//	two: Second collision box
+//	axis: Direction to test for collision
+//	toCenter: Vector from center of box one to box two
+//	index: Identifier for this axis test case
+//	smallestPenetration: Current smallest penetration found
+//	smallestCase: Index of the case with smallest penetration
+//
+// Returns:
+//
+//	bool: true if axis is valid and boxes might be colliding, false if boxes are seperated on the axis
+func tryAxis(one *CollisionBox, two *CollisionBox, axis *Vector, toCenter *Vector, index uint, smallestPenetration float64, smallestCase uint) bool {
+	// Check if axis is too small. This prevents testing against effectively parallet axes and avoids normalization of very small vectors.
+	if axis.SquareMagnitude() < 0.0001 {
+		return true
+	}
+
+	axis.Normalize()
+
+	// Calculate penetration depth along the axis
+	penetration := penetrationOnAxis(one, two, axis, toCenter)
+	// Early exit: If penetration is negative, the boxes are seperated along the axis
+	if penetration < 0 {
+		return false
+	}
+
+	if penetration < smallestPenetration {
+		smallestPenetration = penetration
+		smallestCase = index
+	}
+
+	return true
+}
+
+func CheckOverlap(one *CollisionBox,
+	two *CollisionBox,
+	axis *Vector,
+	toCenter *Vector,
+	index uint,
+	pen float64,
+	best uint) int {
+	if !tryAxis(one, two, axis, toCenter, index, pen, best) {
+		return 0
+	}
+
+	return 1
+}
+
+// Generates contact data for a vertex-face collision b/w two boxes. This is called when we know a vertex from box two is collifing with a face of box one.
+func (c *CollisionDetector) fillPointFaceBoxBox(one, two *CollisionBox, toCenter *Vector, data *CollisionData, best uint, pen float64) {
+	// Get the contact we're going to write to
+	contact := &Contact{}
+
+	// Get the collision normal from box one's axis. This is the face normal of the colliding face
+	normal := one.Transform.GetAxisVector(int(best))
+
+	// Ensure the normal points from box one to box two. If the axis points in the same direction as toCenter, we need to invert it to point toward box two.
+	if normal.ScalarProduct(toCenter) > 0 {
+		normal = normal.Scale(-1.0)
+	}
+
+	// Calculate which vertex of box two is colliding with. We do this by starting at the positive vertex (halfsize) and negating components based on the collision control.
+	vertex := two.halfSize
+
+	// For each axis, if the dot product of that axis with the normal is negative, it means we need to use the negative vertex in that dimension
+	if two.Transform.GetAxisVector(0).ScalarProduct(normal) < 0 {
+		vertex.X = -vertex.X
+	}
+
+	if two.Transform.GetAxisVector(1).ScalarProduct(normal) < 0 {
+		vertex.Y = -vertex.Y
+	}
+
+	if two.Transform.GetAxisVector(2).ScalarProduct(normal) < 0 {
+		vertex.Z = -vertex.Z
+	}
+
+	contact.ContactNormal = normal
+	contact.Penetration = pen
+	contact.ContactPoint = two.Transform.Transform(vertex)
+	contact.SetBodyData(one.Body, two.Body, data.Friction, data.Restitution)
+}
+
+func (c *CollisionDetector) BoxAndBox(one *CollisionBox, two *CollisionBox, data *CollisionData) uint {
+	// Calculate vector b/w box centers
+	toCenter := two.Transform.GetAxisVector(3).Subtract(one.Transform.GetAxisVector(3))
+
+	pen := MaxReal         // Smallest penetration found
+	best := uint(0xffffff) // Index of axis with smallest penetration
+
+	// Test all potential seperating axes:
+
+	// 1. Test box one's face normals (local axes)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(0), toCenter, 0, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(1), toCenter, 1, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(2), toCenter, 2, float64(pen), best)
+
+	// 1. Test box two's face normals (local axes)
+	CheckOverlap(one, two, two.Transform.GetAxisVector(0), toCenter, 3, float64(pen), best)
+	CheckOverlap(one, two, two.Transform.GetAxisVector(1), toCenter, 4, float64(pen), best)
+	CheckOverlap(one, two, two.Transform.GetAxisVector(2), toCenter, 5, float64(pen), best)
+
+	// Store the best axis from face tests for edge-edge collision case
+	bestSingleAxis := best
+
+	// 3. Test Cross products of edges (9 potential edge-edge cases)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(0).Cross(two.Transform.GetAxisVector(0)), toCenter, 6, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(0).Cross(two.Transform.GetAxisVector(1)), toCenter, 7, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(0).Cross(two.Transform.GetAxisVector(2)), toCenter, 8, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(1).Cross(two.Transform.GetAxisVector(0)), toCenter, 9, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(1).Cross(two.Transform.GetAxisVector(1)), toCenter, 10, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(1).Cross(two.Transform.GetAxisVector(2)), toCenter, 11, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(2).Cross(two.Transform.GetAxisVector(0)), toCenter, 12, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(2).Cross(two.Transform.GetAxisVector(1)), toCenter, 13, float64(pen), best)
+	CheckOverlap(one, two, one.Transform.GetAxisVector(2).Cross(two.Transform.GetAxisVector(2)), toCenter, 14, float64(pen), best)
+
+	if best == 0xffffff {
+		return 0
+	}
+
+	// We now know there's a collision, and we know which of the axes gave the smallest penetration. We now can deal with it in different ways depending on the case.
+	switch {
+	case best < 3:
+		// Vertex of box two on face of box one
+		c.fillPointFaceBoxBox(one, two, toCenter, data, best, float64(pen))
+		data.AddContacts(1)
+		return 1
+
+	case best < 6:
+		// Vertex of box one on face of box two
+		c.fillPointFaceBoxBox(two, one, toCenter.Scale(-1), data, best-3, float64(pen))
+		data.AddContacts(1)
+		return 1
+	default:
+		// Edge-edge contact
+		return c.handleEdgeEdgeContact()
+	}
+
+}
+
+// Handles the complex case of edge-edge collision b/w boxes
+func (c *CollisionDetector) handleEdgeEdgeContact(one, two *CollisionBox, toCenter *Vector, best uint, pen float64, data *CollisionData) uint {
+	// Calculates which edges are involved
+	oneAxisIndex := best / 3
+	twoAxisIndex := best % 3
+
+	// Get the axes and compute collision axis
+	oneAxis := one.Offset.GetAxisVector(int(oneAxisIndex))
+	twoAxis := two.Offset.GetAxisVector(int(twoAxisIndex))
+	axis := oneAxis.Cross(twoAxis)
+	axis.Normalize()
+
+	// Ensure axis points from box one to box two
+	if axis.ScalarProduct(toCenter) > 0 {
+		axis = axis.Scale(-1)
+	}
+
+	// We have the axes, but not the edges: each axis has 4 edges parallel
+	// to it, we need to find which of the 4 for each object. We do
+	// that by finding the point in the centre of the edge. We know
+	// its component in the direction of the box's collision axis is zero
+	// (its a mid-point) and we determine which of the extremes in each
+	// of the other axes is closest.
+
+	// we have the axis but not the edges:each axis has 4 edges parallel to it, we need ot find which 4 for each object.
+	// We do that by finding the point in the centere of the edge. We know its components in the direction of the box's collision
+	// axis is zero(it's a mid point) and we determine which of the extremes in each of other axes is closest.
+	ptOnOneEdge := one.halfSize
+	ptOnTwoEdge := two.halfSize
+
+	// Adjust points based on axis directions
+	for i := 0; i < 3; i++ {
+		if i == int(oneAxisIndex) {
+			switch i {
+			case 0:
+				ptOnOneEdge.X = 0
+			case 1:
+				ptOnOneEdge.Y = 0
+			case 2:
+				ptOnOneEdge.Z = 0
+			}
+		} else if one.Transform.GetAxisVector(i).ScalarProduct(axis) > 0 {
+			switch i {
+			case 0:
+				ptOnOneEdge.X = -ptOnOneEdge.X
+			case 1:
+				ptOnOneEdge.Y = -ptOnOneEdge.Y
+			case 2:
+				ptOnOneEdge.Z = -ptOnOneEdge.Z
+			}
+		}
+
+		if i == int(twoAxisIndex) {
+			switch i {
+			case 0:
+				ptOnTwoEdge.X = 0
+			case 1:
+				ptOnTwoEdge.Y = 0
+			case 2:
+				ptOnTwoEdge.Z = 0
+			}
+		} else if two.Transform.GetAxisVector(i).ScalarProduct(axis) > 0 {
+			switch i {
+			case 0:
+				ptOnTwoEdge.X = -ptOnTwoEdge.X
+			case 1:
+				ptOnTwoEdge.Y = -ptOnTwoEdge.Y
+			case 2:
+				ptOnTwoEdge.Z = -ptOnTwoEdge.Z
+			}
+		}
+	}
+
+	// Transform edge points to world coordinates
+	ptOnOneEdge = LocalToWorld(ptOnOneEdge, one.Transform)
+	ptOnOneEdge = LocalToWorld(ptOnOneEdge, two.Transform)
+
+}
+
+// Calculates the contact point b/w two edges in 3D space. This function finds the point of closest approach b/w two line segments.
+// Params:
+//   - pOne: Start point of first edge
+//   - dOne: Direction vector of first edge
+//   - oneSize: Half-length of first edge
+//   - pTwo: Start point of second edge
+//   - dTwo: Direction vector of second edge
+//   - twoSize: Half-length of second edge
+//   - useOne: If true, use first edge's midpoint when edges don't cross
+//
+// Returns:
+//
+//	Vector: The calculated contact point b/w the edges
+func contactPoint(pOne *Vector, dOne *Vector, oneSize float64, pTwo *Vector, dTwo *Vector, twoSize float64, useOne bool) *Vector {
+	// Calculate squares of magnitudes and dot products. These are used in the denominator calculation.
+	smOne := dOne.SquareMagnitude()
+	smTwo := dOne.SquareMagnitude()
+	dpOneTwo := dTwo.ScalarProduct(dOne) // Dot product of directions
+
+	// Calculate vector b/w start points and its dot products
+	toSt := pOne.Subtract(pTwo) // Vector from pTwo to pOne
+	dpStaOne := dOne.ScalarProduct(toSt)
+	dpStaTwo := dTwo.ScalarProduct(toSt)
+
+	// Calculate denominator for paramter equations. This will be zero if edges are parallel
+	denom := smOne*smTwo - dpOneTwo*dpOneTwo
+
+	// Handle paraller edge cases
+	if math.Abs(float64(denom)) < 0.0001 {
+		if useOne {
+			return pOne
+		}
+
+		return pTwo
+	}
+
+	// Calculate parameters for closest points on infinite lines
+	mua := (dpOneTwo*dpStaTwo - smTwo*dpStaOne) / denom
+	mub := (smOne*dpStaTwo - dpOneTwo*dpStaOne) / denom
+
 }
