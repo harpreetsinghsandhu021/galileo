@@ -274,3 +274,24 @@ func NewAngledAero(tensor *Matrix3, position *Vector, windspeed *Vector) {}
 func (a *AngledAero) SetOrientation(quaternion *Quaternion) {}
 
 func (a *AngledAero) UpdateForce(body *RigidBody, duration Real) {}
+
+// Represents a three-component explosion effect, applying forces to rigid bodies and potentially particles within its range.
+type Explosion struct {
+	Detonation         *Vector // Location of the detonation of the weapon
+	ImplosionMaxRadius Real    // Radius up to which objects implode in the first stage of the explosion
+	ImplosionMinRadius Real    // Radius within which objects don'feel the implosion force. Objects near the detonation are'nt sucked in
+	// by the air implosion
+	ImplosionDuration Real // Length of time that objects spend imploding before the concussion phase kicks in
+	ImplosionForce    Real // Maximal force that the implosion can apply. This should be relatively small to avoid the implosion pulling objects
+	// through the detonation point and out the other side before the concussion wave kicks in
+	ShockwaveSpeed      Real // Speed that the shock wave is traveling
+	ShockwaveThickness  Real // Range over the shock wave applies force
+	PeakConcussionForce Real // The force at the center of the concussion wave on a stationary object
+	ConcussionDuration  Real // The length of time that the concussion wave is active
+	PeakConventionForce Real // The peak force for stationary objects in the center of the convection chimney
+	ChimneyRadius       Real // The radius of the chimney cylinder in the xz plane
+	ChimneyHeight       Real // The max height of the chimney
+	ConvectionDuration  Real // The length of time the convection chimney is active
+}
+
+func (e *Explosion) UpdateForce(body *RigidBody, duration Real) {}
