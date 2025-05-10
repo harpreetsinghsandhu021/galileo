@@ -308,6 +308,9 @@ func (rb *RigidBody) GetInverseInertiaTensorWorldPtr(inverseInertiaTensor *Matri
 // 5. Recalculates derived data (normalizing orientation, updating  transform matrices)
 // 6. Clears force and torque accumulators for the next frame
 func (rb *RigidBody) Integrate(duration float32) {
+	if !rb.IsAwake {
+		return
+	}
 	// Calculate linear acceleration from force inputs
 	// a = F/m (Newton's second law)
 	rb.LastFrameAcceleration = rb.Acceleration
