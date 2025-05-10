@@ -435,6 +435,32 @@ func (m *Matrix3) SetComponents(compOne *Vector, compTwo *Vector, compThree *Vec
 	m.Data[8] = float32(compThree.Z)
 }
 
+// Performs a component-wise addition of another Matrix to this Matrix. This method modifies the current matrix in place.
+func (m *Matrix3) Add(other *Matrix3) {
+	m.Data[0] += other.Data[0]
+	m.Data[1] += other.Data[1]
+	m.Data[2] += other.Data[2]
+	m.Data[3] += other.Data[3]
+	m.Data[4] += other.Data[4]
+	m.Data[5] += other.Data[5]
+	m.Data[6] += other.Data[6]
+	m.Data[7] += other.Data[7]
+	m.Data[8] += other.Data[8]
+}
+
+// Multiplies each component of this matrix by the given scalar. This method modifies the current matrix in place.
+func (m *Matrix3) MultiplyScalar(scalar float32) {
+	m.Data[0] *= scalar
+	m.Data[1] *= scalar
+	m.Data[2] *= scalar
+	m.Data[3] *= scalar
+	m.Data[4] *= scalar
+	m.Data[5] *= scalar
+	m.Data[6] *= scalar
+	m.Data[7] *= scalar
+	m.Data[8] *= scalar
+}
+
 // Performs a linear interpolation b/w two matrices.
 //
 // Creates a new matrx by linearly interpolating b/w each corresponding element of the source matrices. The interpolation
@@ -449,6 +475,24 @@ func Matrix3LinearInterpolate(a, b *Matrix3, prop float32) *Matrix3 {
 	}
 
 	return result
+}
+
+// Sets the matrix to be the skew-symmetric matrix corresponding to the given vector. A skew-symmetric matrix is a square matrix whose transpose is equal
+// to its negative (A^Y = -A). For a vector v = [vx, vy, vz], the corresponding skew-symmetric matrix is:
+// [0 -vz, vy]
+// [vz, 0 -vx]
+// [-vy vx  0]
+func (m *Matrix3) SetSkewSymmetrix(vector *Vector) {
+	m.Data[0] = 0
+	m.Data[4] = 0
+	m.Data[8] = 0
+	m.Data[1] = -float32(vector.Z)
+	m.Data[2] = float32(vector.Y)
+	m.Data[3] = float32(vector.Z)
+	m.Data[5] = -float32(vector.X)
+	m.Data[6] = -float32(vector.Y)
+	m.Data[7] = float32(vector.X)
+
 }
 
 // Holds a transform matrix, consisting of a rotation matrix and a position. The matrix has 12

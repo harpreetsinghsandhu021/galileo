@@ -334,6 +334,27 @@ func (c *Contact) calculateDesiredDeltaVelocity(duration Real) {
 	c.desiredDeltaVelocity = -c.ContactVelocity.X - thisRestitution*(c.ContactVelocity.X-velocityFromAcc)
 }
 
+// Ensures that both bodies involved in a contact are awake if at least one of them is awake. Collisions with static objects (where body[1] is nil) do not cause the
+// other body to wake up.
+func (c *Contact) matchAwakeState() {
+	// Collisions with the world never cause the other body to wake up
+	if c.body[1] == nil {
+		return
+	}
+
+	body0Awake := c.body[0].GetAwake()
+	body1Awake := c.body[1].GetAwake()
+
+	// Wake up only the sleeping body if one is awake and the other is asleep.
+	if body0Awake != body1Awake {
+		if body0Awake {
+			c.body[1].SetAwake(true)
+		} else {
+			c.body[0].SetAwake(true)
+		}
+	}
+}
+
 // Handles the resolution of contact forces and interpenetration b/w rigid bodies.
 type ContactResovler struct {
 	positionIterations uint // Holds the number of iterations to perform when resolving position
@@ -419,4 +440,73 @@ func (cr *ContactResovler) adjustPositions(contacts []*Contact, numContacts int,
 			cr.positionIterationsUsed++
 		}
 	}
+}
+
+// Calculates the impulse needed to resolve both the seperating velocity and any relative tangential velocity at the contact, taking friction into account.
+func (c *Contact) calculateFrictionImpulse(inverseInertiaTensor [2]*Matrix3) *Vector {
+	impulseContact := &Vector{}
+	inverseMass := c.body[0].GetInverseMass()
+
+	// The equivalent of a cross product in matrices is multiplication by a skew-symmetric matrix - we build the matrix for converting b/w linear and angular quantities.
+	impulseToTorque := &Matrix3{}
+	impulseToTorque.SetSkewSymmetrix(c.relativeContactPosition[0])
+
+	// Build the matrix to convert contact impulse to change in velocity in world coordinates for the first body.
+	deltaVelWorld := impulseToTorque
+	deltaVelWorld.Multiply(inverseInertiaTensor[0])
+	deltaVelWorld.Multiply(impulseToTorque)
+	deltaVelWorld.MultiplyScalar(-1)
+
+	// Check if we need to add the second body's data
+	if c.body[1] != nil {
+		// Set the cross-product matrix for the second body.
+		impulseToTorque2 := &Matrix3{}
+		impulseToTorque2.SetSkewSymmetrix(c.relativeContactPosition[1])
+
+		// Calculate the velocity change matrix for the second body.
+		deltaVelWorld2 := impulseToTorque2
+		deltaVelWorld2.Multiply(inverseInertiaTensor[1])
+		deltaVelWorld2.Multiply(impulseToTorque2)
+		deltaVelWorld2.MultiplyScalar(-1)
+
+		// Add to the total delta velocity
+		deltaVelWorld.Add(deltaVelWorld2)
+
+		// Add to the inverse mass
+		inverseMass += c.body[1].GetInverseMass()
+	}
+
+	// Do a change of basis to convert into contact coordinates
+	deltaVelocity := c.ContactToworld.Transpose()
+	deltaVelocity.Multiply(deltaVelWorld)
+	deltaVelocity.Multiply(c.ContactToworld)
+
+	// Add in the linear velocity change (inverse mass along the diagonal)
+	deltaVelocity.Data[0] += float32(inverseMass)
+	deltaVelocity.Data[1] += float32(inverseMass)
+	deltaVelocity.Data[2] += float32(inverseMass)
+
+	// Invert to get the impulse needed per unit velocity change.
+	impulseMatrix := deltaVelocity.Inverse()
+
+	// Find the target velocities to kill: the desired change along the normal and the negative of the current tangential velocities.
+	velKill := NewVector3(
+		c.desiredDeltaVelocity, -c.ContactVelocity.Y, -c.ContactVelocity.Z,
+	)
+
+	// Find the impulse to kill the target velocities.
+	impulseContact = impulseMatrix.Transform(velKill)
+
+	// Check for exceeding friction
+	planarImpulse := Sqrt(impulseContact.Y*impulseContact.Y + impulseContact.Z*impulseContact.Z)
+	if planarImpulse > Abs(impulseContact.X*c.friction) {
+		impulseContact.Y /= planarImpulse
+		impulseContact.Z /= planarImpulse
+		impulseContact.X = Real(deltaVelocity.Data[0]) + Real(deltaVelocity.Data[1])*c.friction*impulseContact.Y + Real(deltaVelocity.Data[2])*c.friction*impulseContact.Y
+
+		impulseContact.X = c.desiredDeltaVelocity / impulseContact.X
+		impulseContact.Y *= c.friction * impulseContact.X
+		impulseContact.Z *= c.friction * impulseContact.X
+	}
+	return impulseContact
 }
