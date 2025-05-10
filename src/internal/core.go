@@ -231,6 +231,14 @@ func (m *Matrix3) Transform(vector *Vector) *Vector {
 	return m.MultiplyVector(vector)
 }
 
+func (m *Matrix3) TransformTranspose(vector *Vector) *Vector {
+	return NewVector3(
+		vector.X*Real(m.Data[0])+vector.Y*Real(m.Data[3])+vector.Z*Real(m.Data[6]),
+		vector.X*Real(m.Data[1])+vector.Y*Real(m.Data[4])+vector.Z*Real(m.Data[7]),
+		vector.X*Real(m.Data[2])+vector.Y*Real(m.Data[5])+vector.Z*Real(m.Data[8]),
+	)
+}
+
 // Returns a new matrix that is the result of multiplying this matrix by another matrix. Matrix multiplication is
 // performed using the standard mathematical definition: For each element (i, j) in the result matrix, we compute
 // the dot product of the i-th row of this matrix with the j-th column of the other matrix.
@@ -413,7 +421,18 @@ func (m *Matrix3) SetInertiaTensorCoeffs(ix, iy, iz float32) {
 	m.Data[5] = -0
 	m.Data[7] = -0
 	m.Data[8] = iz
+}
 
+func (m *Matrix3) SetComponents(compOne *Vector, compTwo *Vector, compThree *Vector) {
+	m.Data[0] = float32(compOne.X)
+	m.Data[1] = float32(compTwo.X)
+	m.Data[2] = float32(compThree.X)
+	m.Data[3] = float32(compOne.Y)
+	m.Data[4] = float32(compTwo.Y)
+	m.Data[5] = float32(compThree.Y)
+	m.Data[6] = float32(compOne.Z)
+	m.Data[7] = float32(compTwo.Z)
+	m.Data[8] = float32(compThree.Z)
 }
 
 // Performs a linear interpolation b/w two matrices.
