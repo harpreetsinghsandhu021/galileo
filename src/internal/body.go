@@ -282,6 +282,18 @@ func (rb *RigidBody) GetMass() Real {
 	}
 }
 
+func (rb *RigidBody) GetInverseMass() Real {
+	return Real(rb.InverseMass)
+}
+
+func (rb *RigidBody) GetInverseInertiaTensorWorld() *Matrix3 {
+	return rb.InverseInertiaTensorWorld
+}
+
+func (rb *RigidBody) GetInverseInertiaTensorWorldPtr(inverseInertiaTensor *Matrix3) {
+	*inverseInertiaTensor = *rb.InverseInertiaTensorWorld
+}
+
 // Updates the rigid body's state over time.
 //
 // Performs the numerical integration of the equations of motion for a rigid body, advancing its position and orientation based
@@ -392,12 +404,44 @@ func (rb *RigidBody) SetPosition(x Real, y Real, z Real) {
 	rb.Position.Z = z
 }
 
+func (rb *RigidBody) SetPositionVector(position *Vector) {
+	rb.Position = position
+}
+
 func (rb *RigidBody) SetOrientation(r, i, j, k Real) {
 	rb.Orientation.R = float32(r)
 	rb.Orientation.I = float32(i)
 	rb.Orientation.J = float32(j)
 	rb.Orientation.K = float32(k)
 
+	rb.Orientation.Normalize()
+}
+
+func (rb *RigidBody) GetAwake() bool {
+	return rb.IsAwake
+}
+func (rb *RigidBody) GetRotation() *Vector {
+	return rb.Rotation
+}
+
+func (rb *RigidBody) GetRotationPtr(rotation *Vector) {
+	*rotation = *rb.Rotation
+}
+
+func (rb *RigidBody) GetLastFrameAcceleration() *Vector {
+	return rb.LastFrameAcceleration
+}
+
+func (rb *RigidBody) GetLastFrameAccelerationPtr(acc *Vector) {
+	*acc = *rb.LastFrameAcceleration
+}
+
+func (rb *RigidBody) GetOrientation(q *Quaternion) {
+	*q = *rb.Orientation
+}
+
+func (rb *RigidBody) SetOrientationQua(orientation *Quaternion) {
+	rb.Orientation = orientation
 	rb.Orientation.Normalize()
 }
 
@@ -415,4 +459,8 @@ func (rb *RigidBody) SetRotation(x, y, z Real) {
 
 func (rb *RigidBody) GetPosition() *Vector {
 	return rb.Position
+}
+
+func (rb *RigidBody) GetPositionPtr(position *Vector) {
+	*position = *rb.Position
 }
